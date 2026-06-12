@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@apollo/client'
 import { useAuth } from '@/features/auth/AuthContext'
@@ -49,6 +49,17 @@ const NAV = [
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
           d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    ),
+  },
+  {
+    to: '/attendance',
+    label: 'Attendance',
+    adminOnly: false,
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
       </svg>
     ),
   },
@@ -117,7 +128,17 @@ export default function AppLayout({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY, { fetchPolicy: 'cache-and-network' })
-  const showCheckout = settingsData?.churchSettings?.show_checkout ?? true
+
+  // Dynamic browser tab title
+  useEffect(() => {
+    if (user?.church?.name) {
+      document.title = `${user.church.name} | Shepherd`
+    }
+  }, [user?.church?.name])
+  const settings      = settingsData?.churchSettings
+  // Show the checkout tab if show_checkout is on OR require_checkout is on
+  // (requiring checkout without showing the tab makes no sense)
+  const showCheckout  = (settings?.show_checkout ?? true) || (settings?.require_checkout ?? false)
 
   const visibleNav = NAV.filter(item => {
     if (item.adminOnly && !isAdmin) return false
@@ -196,10 +217,15 @@ export default function AppLayout({ children }) {
           className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-lg
             hover:bg-[var(--sidebar-accent)] transition-colors group"
         >
-          <div className="w-7 h-7 rounded-full bg-[var(--primary)]/20 flex items-center justify-center
-            text-xs font-bold text-[var(--primary)] flex-shrink-0">
-            {user?.name?.[0]?.toUpperCase()}
-          </div>
+          {user?.photo ? (
+            <img src={user.photo} alt={user.name}
+              className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[var(--sidebar-border)]" />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-[var(--primary)]/20 flex items-center justify-center
+              text-xs font-bold text-[var(--primary)] flex-shrink-0">
+              {user?.name?.[0]?.toUpperCase()}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-[var(--sidebar-foreground)] truncate">{user?.name}</p>
             <p className="text-[10px] text-[var(--muted-foreground)] truncate">

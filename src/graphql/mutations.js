@@ -262,7 +262,17 @@ export const UPDATE_PROFILE_MUTATION = gql`
       name
       email
       phone
+      photo
       role
+    }
+  }
+`
+
+export const UPDATE_CHURCH_MUTATION = gql`
+  mutation UpdateChurch($name: String!) {
+    updateChurch(name: $name) {
+      id
+      name
     }
   }
 `

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useMutation } from '@apollo/client'
 import { UPDATE_PROFILE_MUTATION } from '@/graphql/mutations'
 import { useAuth } from '@/features/auth/AuthContext'
@@ -9,6 +9,12 @@ export default function ProfilePage() {
   const { theme, toggleTheme } = useTheme()
 
   const [updateProfile] = useMutation(UPDATE_PROFILE_MUTATION)
+  const fileInputRef = useRef(null)
+
+  // Avatar
+  const [photoPreview,  setPhotoPreview]  = useState(user?.photo ?? null)
+  const [photoSaving,   setPhotoSaving]   = useState(false)
+  const [photoError,    setPhotoError]    = useState('')
 
   // Contact info form
   const [info, setInfo] = useState({
@@ -33,6 +39,60 @@ export default function ProfilePage() {
   function setPwField(field) {
     return (e) => { setPw(f => ({ ...f, [field]: e.target.value })); setPwSuccess(false) }
   }
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Please select an image file.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoError('Image must be smaller than 2 MB.')
+      return
+    }
+
+    setPhotoError('')
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setPhotoPreview(ev.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function handleSavePhoto() {
+    setPhotoError('')
+    setPhotoSaving(true)
+    try {
+      const { data } = await updateProfile({
+        variables: { input: { photo: photoPreview } },
+      })
+      updateUser(data.updateProfile)
+    } catch (err) {
+      setPhotoError(err.message || 'Could not save photo.')
+    } finally {
+      setPhotoSaving(false)
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoError('')
+    setPhotoSaving(true)
+    try {
+      const { data } = await updateProfile({
+        variables: { input: { photo: null } },
+      })
+      updateUser(data.updateProfile)
+      setPhotoPreview(null)
+    } catch (err) {
+      setPhotoError(err.message || 'Could not remove photo.')
+    } finally {
+      setPhotoSaving(false)
+    }
+  }
+
+  const photoChanged = photoPreview !== (user?.photo ?? null)
 
   async function handleSaveInfo(e) {
     e.preventDefault()
@@ -96,23 +156,107 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-2xl font-bold text-[var(--foreground)]">My Account</h1>
         <p className="text-sm text-[var(--muted-foreground)] mt-1">
-          Update your contact details or change your password
+          {user?.church?.name}
         </p>
       </div>
 
-      {/* Avatar + role chip */}
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-[var(--primary)]/15 flex items-center justify-center
-          text-xl font-bold text-[var(--primary)] flex-shrink-0">
-          {user?.name?.[0]?.toUpperCase()}
+      {/* Avatar + role */}
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border)]">
+          <h2 className="text-sm font-semibold text-[var(--foreground)]">Profile Photo</h2>
         </div>
-        <div>
-          <p className="font-semibold text-[var(--foreground)]">{user?.name}</p>
-          <span className={`inline-block text-xs px-2.5 py-0.5 rounded-full font-medium mt-0.5 ${roleBadgeClass(user?.role)}`}>
-            {roleName[user?.role] ?? user?.role}
-          </span>
+        <div className="p-5">
+          <div className="flex items-center gap-5">
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+              {photoPreview ? (
+                <img
+                  src={photoPreview}
+                  alt="Profile"
+                  className="w-20 h-20 rounded-full object-cover border-2 border-[var(--border)]"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-[var(--primary)]/15 flex items-center
+                  justify-center text-2xl font-bold text-[var(--primary)]">
+                  {user?.name?.[0]?.toUpperCase()}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[var(--primary)]
+                  text-white flex items-center justify-center shadow
+                  hover:bg-[var(--primary)]/90 transition-colors"
+                title="Change photo"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-[var(--foreground)]">{user?.name}</p>
+              <span className={`inline-block text-xs px-2.5 py-0.5 rounded-full font-medium mt-0.5 ${roleBadgeClass(user?.role)}`}>
+                {roleName[user?.role] ?? user?.role}
+              </span>
+              <p className="text-xs text-[var(--muted-foreground)] mt-2">
+                JPG, PNG, or GIF · max 2 MB
+              </p>
+            </div>
+          </div>
+
+          {photoError && (
+            <p className="mt-3 text-sm text-[var(--destructive)]">{photoError}</p>
+          )}
+
+          {photoChanged && (
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={handleSavePhoto}
+                disabled={photoSaving}
+                className="px-4 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
+                  text-sm font-semibold hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-60"
+              >
+                {photoSaving ? 'Saving…' : 'Save Photo'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPhotoPreview(user?.photo ?? null); setPhotoError('') }}
+                className="px-4 py-2 rounded-lg border border-[var(--border)] text-sm
+                  text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {!photoChanged && photoPreview && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                disabled={photoSaving}
+                className="text-sm text-[var(--muted-foreground)] hover:text-[var(--destructive)]
+                  transition-colors disabled:opacity-60"
+              >
+                {photoSaving ? 'Removing…' : 'Remove photo'}
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
 
       {/* Appearance */}
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
@@ -124,9 +268,7 @@ export default function ProfilePage() {
             <p className="text-sm font-medium text-[var(--foreground)]">
               {theme === 'dark' ? 'Dark mode' : 'Light mode'}
             </p>
-            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-              Saved to this device
-            </p>
+            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">Saved to this device</p>
           </div>
           <button
             onClick={toggleTheme}
@@ -155,7 +297,7 @@ export default function ProfilePage() {
             </div>
           )}
           {infoSuccess && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+            <div className="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 text-sm">
               Changes saved.
             </div>
           )}
@@ -191,7 +333,7 @@ export default function ProfilePage() {
             </div>
           )}
           {pwSuccess && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+            <div className="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 text-sm">
               Password updated.
             </div>
           )}
@@ -226,7 +368,7 @@ export default function ProfilePage() {
 function roleBadgeClass(role) {
   return {
     ADMIN:     'bg-[var(--primary)]/10 text-[var(--primary)]',
-    TEACHER:   'bg-emerald-100 text-emerald-700',
+    TEACHER:   'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400',
     VOLUNTEER: 'bg-[var(--muted)] text-[var(--muted-foreground)]',
   }[role] ?? 'bg-[var(--muted)] text-[var(--muted-foreground)]'
 }

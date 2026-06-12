@@ -7,6 +7,7 @@ export const ME_QUERY = gql`
       name
       email
       phone
+      photo
       role
       church {
         id
@@ -231,6 +232,22 @@ export const CHILD_CHECKINS_QUERY = gql`
       teacher_phone
       service { name }
       classGroup { name }
+    }
+  }
+`
+
+export const ATTENDANCE_LOGS_QUERY = gql`
+  query AttendanceLogs($date: Date, $serviceId: ID, $classId: ID) {
+    attendanceLogs(date: $date, serviceId: $serviceId, classId: $classId) {
+      id
+      pickup_code
+      guardian_name
+      guardian_phone
+      checked_in_at
+      checked_out_at
+      person { id first_name last_name date_of_birth medical_notes }
+      service { id name }
+      classGroup { id name }
     }
   }
 `

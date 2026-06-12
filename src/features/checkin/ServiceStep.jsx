@@ -39,12 +39,13 @@ export default function ServiceStep({ person, household, initialGuardianName = '
   const { data: clsData }                      = useQuery(CLASSES_QUERY)
   const [checkIn, { loading: checking }]       = useMutation(CHECK_IN_MUTATION)
 
-  const [error,         setError]         = useState('')
-  const [autoResult,    setAutoResult]    = useState(null)
-  const [selectedClass, setSelectedClass] = useState(person.classGroup?.id ?? '')
-  const [classError,    setClassError]    = useState('')
-  const [guardianName,  setGuardianName]  = useState(initialGuardianName)
-  const [guardianPhone, setGuardianPhone] = useState(initialGuardianPhone || household?.phone || '')
+  const [error,            setError]         = useState('')
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false)
+  const [autoResult,       setAutoResult]    = useState(null)
+  const [selectedClass,    setSelectedClass] = useState(person.classGroup?.id ?? '')
+  const [classError,       setClassError]    = useState('')
+  const [guardianName,     setGuardianName]  = useState(initialGuardianName)
+  const [guardianPhone,    setGuardianPhone] = useState(initialGuardianPhone || household?.phone || '')
 
   const services = svcData?.services ?? []
   const classes  = clsData?.classes  ?? []
@@ -66,6 +67,12 @@ export default function ServiceStep({ person, household, initialGuardianName = '
   }
 
   async function handleCheckIn(serviceId) {
+    // Class is required when classes exist
+    if (classes.length > 0 && !selectedClass) {
+      setClassError('Please select a class before checking in.')
+      return
+    }
+
     // Re-validate the selected class before submitting
     if (selectedClass) {
       const cls = classes.find(c => c.id === selectedClass)
@@ -79,6 +86,7 @@ export default function ServiceStep({ person, household, initialGuardianName = '
     }
 
     setError('')
+    setAlreadyCheckedIn(false)
     try {
       const { data } = await checkIn({
         variables: {
@@ -91,7 +99,12 @@ export default function ServiceStep({ person, household, initialGuardianName = '
       })
       onDone(data.checkIn)
     } catch (e) {
-      setError(e.message || 'Check-in failed. Please try again.')
+      const msg = e.message || ''
+      if (msg.toLowerCase().includes('already checked in')) {
+        setAlreadyCheckedIn(true)
+      } else {
+        setError(msg || 'Check-in failed. Please try again.')
+      }
     }
   }
 
@@ -125,12 +138,19 @@ export default function ServiceStep({ person, household, initialGuardianName = '
         </div>
       </div>
 
-      {/* Class selection */}
+      {/* Class selection — required */}
       {classes.length > 0 && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">
-            Class
-          </p>
+        <div className={`rounded-xl border bg-[var(--card)] p-4 ${
+          !selectedClass && classError ? 'border-red-400 dark:border-red-600' : 'border-[var(--border)]'
+        }`}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+              Class <span className="text-red-500 ml-0.5">*</span>
+            </p>
+            {!selectedClass && !classError && (
+              <span className="text-[10px] text-[var(--muted-foreground)]">Select a class to continue</span>
+            )}
+          </div>
 
           {classError && (
             <div className="mb-3 flex items-start gap-2 p-2.5 rounded-lg
@@ -144,19 +164,6 @@ export default function ServiceStep({ person, household, initialGuardianName = '
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {/* No class option */}
-            <button
-              type="button"
-              onClick={() => { setSelectedClass(''); setClassError('') }}
-              className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
-                selectedClass === ''
-                  ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
-                  : 'border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/50'
-              }`}
-            >
-              <span className="font-medium">No class</span>
-            </button>
-
             {classes.map(cls => {
               const err    = ageError(cls, childAge)
               const isSelected = selectedClass === cls.id
@@ -234,6 +241,27 @@ export default function ServiceStep({ person, household, initialGuardianName = '
           </div>
         </div>
       </div>
+
+      {alreadyCheckedIn && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20
+          dark:border-amber-700 p-4 space-y-2">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                {person.first_name} is already checked in
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Please use the Check Out screen to check them out first, then check them back in.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--destructive)]/10 text-[var(--destructive)] text-sm">
