@@ -3,6 +3,16 @@ import { useLazyQuery, useMutation, useQuery } from '@apollo/client'
 import { SEARCH_CHILDREN_QUERY, CLASSES_QUERY } from '@/graphql/queries'
 import { REGISTER_CHILD_MUTATION, UPDATE_PERSON_MUTATION } from '@/graphql/mutations'
 
+function calcAge(dob) {
+  if (!dob) return null
+  const birth = new Date(dob)
+  const now   = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
+  return age
+}
+
 // onSelectPerson(person, guardianName?, guardianPhone?) — extra args supplied for new registrations
 export default function SearchStep({ onSelectPerson }) {
   const [query, setQuery]   = useState('')
@@ -74,7 +84,9 @@ export default function SearchStep({ onSelectPerson }) {
           <p className="text-xs text-[var(--muted-foreground)]">
             {results.length} child{results.length !== 1 ? 'ren' : ''} found
           </p>
-          {results.map((person) => (
+          {results.map((person) => {
+            const age = calcAge(person.date_of_birth)
+            return (
             <div key={person.id} className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
               {/* Result row */}
               <div className="flex items-center gap-3 p-4">
@@ -92,6 +104,12 @@ export default function SearchStep({ onSelectPerson }) {
                         <p className="font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)]">
                           {person.first_name} {person.last_name}
                         </p>
+                        {age !== null && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full
+                            bg-[var(--muted)] text-[var(--muted-foreground)] flex-shrink-0">
+                            {age} yrs
+                          </span>
+                        )}
                         {person.classGroup && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full
                             bg-[var(--primary)]/10 text-[var(--primary)] flex-shrink-0">
@@ -100,7 +118,7 @@ export default function SearchStep({ onSelectPerson }) {
                         )}
                         {person.activeCheckin && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full
-                            bg-amber-100 text-amber-700 flex-shrink-0">
+                            bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 flex-shrink-0">
                             Already in
                           </span>
                         )}
@@ -108,9 +126,10 @@ export default function SearchStep({ onSelectPerson }) {
                       <p className="text-xs text-[var(--muted-foreground)] truncate">
                         {person.household.last_name} family
                         {person.household.phone ? ` · ${person.household.phone}` : ''}
+                        {person.date_of_birth ? ` · b. ${new Date(person.date_of_birth).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
                       </p>
                       {person.activeCheckin && (
-                        <p className="text-xs text-amber-600 mt-0.5">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                           {person.activeCheckin.service.name}
                         </p>
                       )}
@@ -153,7 +172,8 @@ export default function SearchStep({ onSelectPerson }) {
                 />
               )}
             </div>
-          ))}
+            )
+          })}
 
           {/* Register option when results exist but child not listed */}
           {!showForm && (
