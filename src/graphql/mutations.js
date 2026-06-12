@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client'
 
 export const CHECK_IN_MUTATION = gql`
-  mutation CheckIn($personId: ID!, $serviceId: ID!, $guardianName: String, $guardianPhone: String) {
-    checkIn(personId: $personId, serviceId: $serviceId, guardianName: $guardianName, guardianPhone: $guardianPhone) {
+  mutation CheckIn($personId: ID!, $serviceId: ID!, $classId: ID, $guardianName: String, $guardianPhone: String) {
+    checkIn(personId: $personId, serviceId: $serviceId, classId: $classId, guardianName: $guardianName, guardianPhone: $guardianPhone) {
       id
       pickup_code
       guardian_name
