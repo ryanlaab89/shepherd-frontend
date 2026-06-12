@@ -48,7 +48,7 @@ export default function CheckInPage() {
 
       {step !== 'done' && (
         <StepBar
-          steps={['Search', 'Service']}
+          steps={['Search', 'Confirm']}
           current={stepIndex[step]}
         />
       )}

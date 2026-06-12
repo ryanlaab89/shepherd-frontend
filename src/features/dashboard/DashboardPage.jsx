@@ -11,40 +11,7 @@ import {
   USERS_QUERY,
 } from '@/graphql/queries'
 import { SET_CLASS_SESSION_MUTATION, DELETE_CHECKIN_MUTATION } from '@/graphql/mutations'
-
-// Returns "HH:MM" from a "HH:MM:SS" or "HH:MM" string
-function toHHMM(t) {
-  if (!t) return null
-  return t.slice(0, 5)
-}
-
-// Detect which service is active right now (or most recently started today)
-function detectCurrentService(services) {
-  if (!services?.length) return null
-  const now   = new Date()
-  const day   = now.toLocaleDateString('en-US', { weekday: 'long' }) // "Sunday"
-  const hhmm  = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-
-  const todayServices = services.filter(s =>
-    !s.day_of_week || s.day_of_week.toLowerCase() === day.toLowerCase()
-  )
-  if (!todayServices.length) return null
-
-  // Active right now (within window)
-  const active = todayServices.find(s => {
-    const start = toHHMM(s.start_time)
-    const end   = toHHMM(s.end_time)
-    if (!start || !end) return false
-    return hhmm >= start && hhmm <= end
-  })
-  if (active) return active.id
-
-  // Most recently started (already passed start but hasn't started another)
-  const past = todayServices
-    .filter(s => toHHMM(s.start_time) && toHHMM(s.start_time) <= hhmm)
-    .sort((a, b) => toHHMM(b.start_time).localeCompare(toHHMM(a.start_time)))
-  return past[0]?.id ?? null
-}
+import { detectActiveService } from '@/lib/serviceUtils'
 
 export default function DashboardPage() {
   const [search,          setSearch]          = useState('')
@@ -94,10 +61,11 @@ export default function DashboardPage() {
 
   // Auto-detect current service on mount and whenever services load
   useEffect(() => {
-    const detected = detectCurrentService(allServices)
-    setAutoService(detected)
-    if (detected && filterServiceId === '') {
-      setFilterServiceId(detected)
+    const result = detectActiveService(allServices)
+    const id = result?.service?.id ?? null
+    setAutoService(id)
+    if (id && filterServiceId === '') {
+      setFilterServiceId(id)
     }
   }, [allServices.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
