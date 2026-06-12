@@ -166,6 +166,12 @@ export const DELETE_CHECKIN_MUTATION = gql`
   }
 `
 
+export const AUTO_CHECKOUT_SERVICE_MUTATION = gql`
+  mutation AutoCheckoutService($serviceId: ID!) {
+    autoCheckoutService(serviceId: $serviceId)
+  }
+`
+
 export const CREATE_SERVICE_MUTATION = gql`
   mutation CreateService($input: ServiceInput!) {
     createService(input: $input) {

@@ -10,7 +10,7 @@ import {
   SERVICES_QUERY,
   USERS_QUERY,
 } from '@/graphql/queries'
-import { SET_CLASS_SESSION_MUTATION, DELETE_CHECKIN_MUTATION } from '@/graphql/mutations'
+import { SET_CLASS_SESSION_MUTATION, DELETE_CHECKIN_MUTATION, AUTO_CHECKOUT_SERVICE_MUTATION } from '@/graphql/mutations'
 import { detectActiveService } from '@/lib/serviceUtils'
 
 export default function DashboardPage() {
@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const [sortDir,         setSortDir]         = useState('desc')   // 'asc' | 'desc'
   const [autoService,     setAutoService]     = useState(null)     // service ID auto-detected
   const [pendingDelete,   setPendingDelete]   = useState(null)     // checkin id awaiting confirm
+  const [autoCheckoutMsg, setAutoCheckoutMsg] = useState('')       // toast after auto-checkout
+  const prevServiceRef = useRef(null)                              // tracks last detected service id
   const navigate = useNavigate()
 
   const { data: classData } = useQuery(TODAY_CLASS_SESSIONS_QUERY, { pollInterval: 60000 })
@@ -54,6 +56,47 @@ export default function DashboardPage() {
     ],
     onCompleted: () => setPendingDelete(null),
   })
+
+  const [autoCheckoutService] = useMutation(AUTO_CHECKOUT_SERVICE_MUTATION, {
+    refetchQueries: [
+      { query: ACTIVE_CHECKINS_QUERY },
+      { query: TODAY_CHECKINS_QUERY },
+      { query: DASHBOARD_QUERY },
+    ],
+  })
+
+  // Poll every 60s when show_checkout is OFF, detect service transitions and auto-checkout
+  useEffect(() => {
+    if (showCheckout) return
+    if (!allServices.length) return
+
+    function tick() {
+      const result = detectActiveService(allServices)
+      const currentId = result?.service?.id ?? null
+      const prev = prevServiceRef.current
+
+      if (prev !== null && prev !== currentId) {
+        // Service changed — auto-checkout all remaining kids from the previous service
+        autoCheckoutService({ variables: { serviceId: prev } })
+          .then(({ data }) => {
+            const count = data?.autoCheckoutService ?? 0
+            if (count > 0) {
+              const svcName = allServices.find(s => s.id === prev)?.name ?? 'previous service'
+              setAutoCheckoutMsg(`Auto-checked out ${count} ${count === 1 ? 'child' : 'children'} from ${svcName}`)
+              setTimeout(() => setAutoCheckoutMsg(''), 6000)
+            }
+          })
+          .catch(() => {})
+      }
+
+      prevServiceRef.current = currentId
+    }
+
+    // Run once immediately when services load, then every 60s
+    tick()
+    const id = setInterval(tick, 60000)
+    return () => clearInterval(id)
+  }, [allServices.length, showCheckout]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stats    = statsData?.dashboard
   const rawList  = showCheckout ? (activeData?.activeCheckins ?? []) : (todayData?.todayCheckins ?? [])
@@ -205,6 +248,18 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Auto-checkout toast */}
+      {autoCheckoutMsg && (
+        <div className="mb-4 flex items-center gap-2.5 px-4 py-3 rounded-xl
+          bg-emerald-50 border border-emerald-200 text-emerald-800
+          dark:bg-emerald-900/20 dark:border-emerald-700 dark:text-emerald-300">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <p className="text-sm font-medium">{autoCheckoutMsg}</p>
         </div>
       )}
 

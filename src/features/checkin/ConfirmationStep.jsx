@@ -1,5 +1,9 @@
 export default function ConfirmationStep({ checkin, showCheckout = true, onAnother }) {
   function printLabel() {
+    const guardianLine = checkin.guardian_name
+      ? `<div class="guardian">Guardian: ${checkin.guardian_name}</div>`
+      : ''
+
     const win = window.open('', '_blank')
     win.document.write(`
       <!DOCTYPE html>
@@ -9,23 +13,25 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 0; }
+          body { font-family: 'Plus Jakarta Sans', sans-serif; }
           .label {
             width: 4in; height: 2.5in;
             border: 2px solid #1A3A8C;
             border-radius: 12px;
-            padding: 20px 24px;
+            padding: 16px 20px;
             display: flex; flex-direction: column; justify-content: space-between;
           }
           .header { display: flex; align-items: center; gap: 8px; }
           .dot { width: 10px; height: 10px; border-radius: 50%; background: #1A3A8C; }
           .app-name { font-size: 11px; font-weight: 600; color: #1A3A8C; letter-spacing: 0.08em; text-transform: uppercase; }
-          .child-name { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.1; }
-          .service { font-size: 13px; color: #64748b; margin-top: 2px; }
+          .child-name { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; }
+          .service { font-size: 12px; color: #64748b; margin-top: 2px; }
+          .guardian { font-size: 11px; color: #475569; margin-top: 3px; font-weight: 600; }
+          .barcode-section { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+          .barcode-section svg { max-width: 200px; height: 48px; display: block; }
+          .code { font-size: 13px; font-weight: 700; color: #1A3A8C; letter-spacing: 0.22em; font-family: monospace; }
           .footer { display: flex; align-items: flex-end; justify-content: space-between; }
-          .code-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
-          .code { font-size: 38px; font-weight: 800; color: #1A3A8C; letter-spacing: 0.18em; line-height: 1; }
-          .time { font-size: 11px; color: #94a3b8; text-align: right; }
+          .time { font-size: 10px; color: #94a3b8; text-align: right; line-height: 1.5; }
           @media print {
             body { margin: 0; }
             .label { border: 2px solid #1A3A8C !important; }
@@ -41,11 +47,12 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
           <div>
             <div class="child-name">${checkin.person.first_name} ${checkin.person.last_name}</div>
             <div class="service">${checkin.service.name}</div>
+            ${guardianLine}
           </div>
           <div class="footer">
             ${showCheckout ? `
-            <div>
-              <div class="code-label">Pickup Code</div>
+            <div class="barcode-section">
+              <svg id="barcode"></svg>
               <div class="code">${checkin.pickup_code}</div>
             </div>` : '<div></div>'}
             <div class="time">
@@ -54,7 +61,22 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
             </div>
           </div>
         </div>
-        <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }</script>
+        <script src="https://unpkg.com/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+        <script>
+          window.onload = () => {
+            ${showCheckout ? `
+            JsBarcode('#barcode', '${checkin.pickup_code}', {
+              format: 'CODE128',
+              width: 2,
+              height: 48,
+              displayValue: false,
+              margin: 0,
+              lineColor: '#0f172a',
+            });` : ''}
+            window.print();
+            window.onafterprint = () => window.close();
+          };
+        <\/script>
       </body>
       </html>
     `)
