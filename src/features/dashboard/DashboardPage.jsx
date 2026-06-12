@@ -10,7 +10,7 @@ import {
   SERVICES_QUERY,
   USERS_QUERY,
 } from '@/graphql/queries'
-import { SET_CLASS_SESSION_MUTATION } from '@/graphql/mutations'
+import { SET_CLASS_SESSION_MUTATION, DELETE_CHECKIN_MUTATION } from '@/graphql/mutations'
 
 // Returns "HH:MM" from a "HH:MM:SS" or "HH:MM" string
 function toHHMM(t) {
@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [sortField,       setSortField]       = useState('time')   // 'time' | 'name'
   const [sortDir,         setSortDir]         = useState('desc')   // 'asc' | 'desc'
   const [autoService,     setAutoService]     = useState(null)     // service ID auto-detected
+  const [pendingDelete,   setPendingDelete]   = useState(null)     // checkin id awaiting confirm
   const navigate = useNavigate()
 
   const { data: classData } = useQuery(TODAY_CLASS_SESSIONS_QUERY, { pollInterval: 60000 })
@@ -76,6 +77,15 @@ export default function DashboardPage() {
   const { data: todayData,  loading: todayLoading  } = useQuery(TODAY_CHECKINS_QUERY, {
     pollInterval: 15000,
     skip: showCheckout,
+  })
+
+  const [deleteCheckin, { loading: deleting }] = useMutation(DELETE_CHECKIN_MUTATION, {
+    refetchQueries: [
+      { query: ACTIVE_CHECKINS_QUERY },
+      { query: TODAY_CHECKINS_QUERY },
+      { query: DASHBOARD_QUERY },
+    ],
+    onCompleted: () => setPendingDelete(null),
   })
 
   const stats    = statsData?.dashboard
@@ -344,11 +354,15 @@ export default function DashboardPage() {
                     <th className="text-left px-4 py-3 font-medium text-[var(--muted-foreground)]">Code</th>
                   )}
                   <SortHeader label="Checked In" field="time" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
+                  <th className="px-4 py-3 w-10" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {checkins.map((c) => (
-                  <tr key={c.id} className="bg-[var(--card)] hover:bg-[var(--muted)]/40 transition-colors">
+                {checkins.map((c) => {
+                  const isConfirming = pendingDelete === c.id
+                  return (
+                  <tr key={c.id} className={`bg-[var(--card)] transition-colors
+                    ${isConfirming ? 'bg-red-50 dark:bg-red-900/10' : 'hover:bg-[var(--muted)]/40'}`}>
                     <td className="px-4 py-3 font-medium text-[var(--foreground)]">
                       {c.person.first_name} {c.person.last_name}
                     </td>
@@ -383,8 +397,43 @@ export default function DashboardPage() {
                     <td className="px-4 py-3 text-[var(--muted-foreground)]">
                       {new Date(c.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
+                      {isConfirming ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => deleteCheckin({ variables: { checkinId: c.id } })}
+                            disabled={deleting}
+                            className="px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-medium
+                              hover:bg-red-700 disabled:opacity-50 transition-colors"
+                          >
+                            {deleting ? '…' : 'Remove'}
+                          </button>
+                          <button
+                            onClick={() => setPendingDelete(null)}
+                            className="px-2.5 py-1 rounded-md border border-[var(--border)] text-xs
+                              text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setPendingDelete(c.id)}
+                          title="Remove this check-in (mistake correction)"
+                          className="p-1.5 rounded-md text-[var(--muted-foreground)] opacity-40
+                            hover:opacity-100 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20
+                            transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

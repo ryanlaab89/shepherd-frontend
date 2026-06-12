@@ -32,6 +32,8 @@ export default function ChildrenPage() {
 
   const [search, setSearch] = useState('')
   const [filterClass, setFilterClass] = useState('')
+  const [sortField, setSortField] = useState('name')   // 'name'|'age'|'class'|'lastVisit'|'visits'
+  const [sortDir, setSortDir] = useState('asc')
   const [expandedId, setExpandedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -48,14 +50,44 @@ export default function ChildrenPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return children.filter(c => {
+    const list = children.filter(c => {
       const name = `${c.first_name} ${c.last_name}`.toLowerCase()
       const guardian = c.household?.last_name?.toLowerCase() ?? ''
       const matchSearch = !q || name.includes(q) || guardian.includes(q)
       const matchClass = !filterClass || c.classGroup?.id === filterClass
       return matchSearch && matchClass
     })
-  }, [children, search, filterClass])
+
+    list.sort((a, b) => {
+      let cmp = 0
+      if (sortField === 'name') {
+        cmp = `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)
+      } else if (sortField === 'age') {
+        const aAge = a.date_of_birth ? new Date(a.date_of_birth).getTime() : 0
+        const bAge = b.date_of_birth ? new Date(b.date_of_birth).getTime() : 0
+        cmp = bAge - aAge  // older DOB = younger age; ascending age = newer DOB first
+      } else if (sortField === 'class') {
+        cmp = (a.classGroup?.name ?? '').localeCompare(b.classGroup?.name ?? '')
+      } else if (sortField === 'lastVisit') {
+        cmp = (a.last_checkin_at ? new Date(a.last_checkin_at).getTime() : 0)
+            - (b.last_checkin_at ? new Date(b.last_checkin_at).getTime() : 0)
+      } else if (sortField === 'visits') {
+        cmp = (a.checkins_count ?? 0) - (b.checkins_count ?? 0)
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+    return list
+  }, [children, search, filterClass, sortField, sortDir])
+
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
 
   function toggleExpand(id) {
     if (expandedId === id) {
@@ -166,12 +198,12 @@ export default function ChildrenPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--muted)]/40">
-                <th className="text-left px-4 py-3 font-medium text-[var(--muted-foreground)]">Name</th>
-                <th className="text-left px-4 py-3 font-medium text-[var(--muted-foreground)] hidden sm:table-cell">Age</th>
-                <th className="text-left px-4 py-3 font-medium text-[var(--muted-foreground)] hidden md:table-cell">Class</th>
+                <ChildSortHeader label="Name"       field="name"      sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
+                <ChildSortHeader label="Age"        field="age"       sortField={sortField} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
+                <ChildSortHeader label="Class"      field="class"     sortField={sortField} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
                 <th className="text-left px-4 py-3 font-medium text-[var(--muted-foreground)] hidden lg:table-cell">Family</th>
-                <th className="text-left px-4 py-3 font-medium text-[var(--muted-foreground)] hidden lg:table-cell">Last Visit</th>
-                <th className="text-right px-4 py-3 font-medium text-[var(--muted-foreground)]">Visits</th>
+                <ChildSortHeader label="Last Visit" field="lastVisit" sortField={sortField} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                <ChildSortHeader label="Visits"     field="visits"    sortField={sortField} sortDir={sortDir} onSort={toggleSort} align="right" />
               </tr>
             </thead>
             <tbody>
@@ -455,5 +487,32 @@ function InfoRow({ label, value }) {
       <span className="text-[var(--muted-foreground)] w-24 flex-shrink-0">{label}</span>
       <span className="text-[var(--foreground)]">{value}</span>
     </div>
+  )
+}
+
+function ChildSortHeader({ label, field, sortField, sortDir, onSort, className = '', align = 'left' }) {
+  const active = sortField === field
+  return (
+    <th className={`px-4 py-3 font-medium text-[var(--muted-foreground)] text-${align} ${className}`}>
+      <button
+        onClick={() => onSort(field)}
+        className={`flex items-center gap-1 hover:text-[var(--foreground)] transition-colors
+          ${align === 'right' ? 'ml-auto' : ''}
+          ${active ? 'text-[var(--foreground)]' : ''}`}
+      >
+        {label}
+        <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-30'}`}>
+          {active && sortDir === 'asc' ? (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </span>
+      </button>
+    </th>
   )
 }

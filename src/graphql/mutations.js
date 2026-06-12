@@ -160,6 +160,12 @@ export const DELETE_CHILD_MUTATION = gql`
   }
 `
 
+export const DELETE_CHECKIN_MUTATION = gql`
+  mutation DeleteCheckin($checkinId: ID!) {
+    deleteCheckin(checkinId: $checkinId)
+  }
+`
+
 export const CREATE_SERVICE_MUTATION = gql`
   mutation CreateService($input: ServiceInput!) {
     createService(input: $input) {
