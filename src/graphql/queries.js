@@ -204,6 +204,37 @@ export const DASHBOARD_QUERY = gql`
   }
 `
 
+export const CHILDREN_QUERY = gql`
+  query Children {
+    children {
+      id
+      first_name
+      last_name
+      date_of_birth
+      medical_notes
+      notes
+      checkins_count
+      last_checkin_at
+      household { id last_name phone }
+      classGroup { id name }
+    }
+  }
+`
+
+export const CHILD_CHECKINS_QUERY = gql`
+  query ChildCheckins($personId: ID!) {
+    childCheckins(personId: $personId) {
+      id
+      checked_in_at
+      checked_out_at
+      teacher_name
+      teacher_phone
+      service { name }
+      classGroup { name }
+    }
+  }
+`
+
 export const CHURCH_SETTINGS_QUERY = gql`
   query ChurchSettings {
     churchSettings {

@@ -148,8 +148,15 @@ export const UPDATE_PERSON_MUTATION = gql`
       last_name
       date_of_birth
       medical_notes
+      notes
       classGroup { id name }
     }
+  }
+`
+
+export const DELETE_CHILD_MUTATION = gql`
+  mutation DeleteChild($personId: ID!) {
+    deleteChild(personId: $personId)
   }
 `
 

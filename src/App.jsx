@@ -12,6 +12,7 @@ import SettingsPage from '@/features/settings/SettingsPage'
 import ClassesPage from '@/features/classes/ClassesPage'
 import ReportsPage from '@/features/reports/ReportsPage'
 import ProfilePage from '@/features/profile/ProfilePage'
+import ChildrenPage from '@/features/children/ChildrenPage'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth()
@@ -52,6 +53,7 @@ export default function App() {
                     <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
                     <Route path="/classes" element={<AdminRoute><ClassesPage /></AdminRoute>} />
                     <Route path="/reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
+                    <Route path="/children" element={<ChildrenPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                   </Routes>
                 </AppLayout>
