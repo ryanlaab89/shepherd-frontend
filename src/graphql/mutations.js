@@ -166,6 +166,25 @@ export const DELETE_CHECKIN_MUTATION = gql`
   }
 `
 
+export const UPDATE_CHECKIN_MUTATION = gql`
+  mutation UpdateCheckin($checkinId: ID!, $guardianName: String, $guardianPhone: String, $serviceId: ID) {
+    updateCheckin(checkinId: $checkinId, guardianName: $guardianName, guardianPhone: $guardianPhone, serviceId: $serviceId) {
+      id
+      guardian_name
+      guardian_phone
+      pickup_code
+      checked_in_at
+      checked_out_at
+      service { id name }
+      classGroup { id name }
+      person {
+        id first_name last_name date_of_birth medical_notes checkins_count last_checkin_at
+        household { id last_name phone }
+      }
+    }
+  }
+`
+
 export const AUTO_CHECKOUT_SERVICE_MUTATION = gql`
   mutation AutoCheckoutService($serviceId: ID!) {
     autoCheckoutService(serviceId: $serviceId)

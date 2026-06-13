@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@apollo/client'
 import { useToast } from '@/contexts/ToastContext'
@@ -15,10 +15,21 @@ import {
   DELETE_CHECKIN_MUTATION,
   AUTO_CHECKOUT_SERVICE_MUTATION,
   CHECK_OUT_MUTATION,
+  UPDATE_CHECKIN_MUTATION,
 } from '@/graphql/mutations'
 import { detectActiveService } from '@/lib/serviceUtils'
 import { isValidPhone } from '@/lib/validators'
+import { printCheckinLabel } from '@/lib/printLabel'
 import PhoneInput from '@/components/PhoneInput'
+
+function calcAge(dob) {
+  if (!dob) return null
+  return Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+}
+function fmtDate(dt) {
+  if (!dt) return '—'
+  return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 function fmtTime(dt) {
   if (!dt) return null
@@ -41,6 +52,9 @@ export default function DashboardPage() {
   const [quickCode,       setQuickCode]       = useState('')
   const [quickLoading,    setQuickLoading]    = useState(false)
   const [view,            setView]            = useState('table') // 'table' | 'summary'
+  const [expandedId,      setExpandedId]      = useState(null)
+  const [editCheckin,     setEditCheckin]     = useState(null) // { id, guardianName, guardianPhone, serviceId }
+  const [editSaving,      setEditSaving]      = useState(false)
   const prevServiceRef = useRef(null)
   const today = useMemo(() => new Date().toISOString().split('T')[0], [])
   const navigate = useNavigate()
@@ -81,6 +95,7 @@ export default function DashboardPage() {
   const [deleteCheckin,       { loading: deleting     }] = useMutation(DELETE_CHECKIN_MUTATION,       refetchAll)
   const [checkOutMutation,    { loading: checkingOut  }] = useMutation(CHECK_OUT_MUTATION,            refetchAll)
   const [autoCheckoutService]                            = useMutation(AUTO_CHECKOUT_SERVICE_MUTATION, { refetchQueries: [{ query: TODAY_CHECKINS_QUERY }] })
+  const [updateCheckinMutation]                          = useMutation(UPDATE_CHECKIN_MUTATION,        refetchAll)
 
   // Auto-checkout when service ends (only when checkout is disabled — system manages it)
   useEffect(() => {
@@ -256,6 +271,26 @@ export default function DashboardPage() {
     a.download = `attendance-${date.replace(/[, ]+/g, '-').toLowerCase()}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault()
+    if (!editCheckin) return
+    setEditSaving(true)
+    try {
+      await updateCheckinMutation({ variables: {
+        checkinId:    editCheckin.id,
+        guardianName: editCheckin.guardianName || null,
+        guardianPhone: editCheckin.guardianPhone || null,
+        serviceId:    editCheckin.serviceId || null,
+      }})
+      toast?.success('Check-in updated')
+      setEditCheckin(null)
+    } catch (err) {
+      toast?.error(err.message || 'Could not update check-in')
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   function printReport() {
@@ -637,14 +672,21 @@ export default function DashboardPage() {
                   const isSelecting   = selected.has(c.id)
                   const isDeleting    = pendingDelete   === c.id
                   const isCheckingOut = pendingCheckout === c.id
+                  const isExpanded    = expandedId === c.id
+                  const isEditing     = editCheckin?.id === c.id
+                  const colSpan       = showCheckout ? 9 : 7
 
                   return (
-                    <tr key={c.id} className={`transition-colors ${
-                      isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
-                      isCheckingOut ? 'bg-[var(--primary)]/5' :
-                      isSelecting   ? 'bg-[var(--primary)]/5' :
-                      'bg-[var(--card)] hover:bg-[var(--muted)]/40'
-                    }`}>
+                    <Fragment key={c.id}>
+                    <tr
+                      onClick={e => { if (e.target.closest('button,input')) return; setExpandedId(isExpanded ? null : c.id) }}
+                      className={`transition-colors cursor-pointer ${
+                        isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
+                        isCheckingOut ? 'bg-[var(--primary)]/5' :
+                        isExpanded    ? 'bg-[var(--primary)]/5' :
+                        isSelecting   ? 'bg-[var(--primary)]/5' :
+                        'bg-[var(--card)] hover:bg-[var(--muted)]/40'
+                      }`}>
                       <td className="px-3 py-3 text-center">
                         <input type="checkbox" checked={isSelecting} onChange={() => toggleRow(c.id)}
                           className="rounded border-[var(--border)] accent-[var(--primary)] cursor-pointer" />
@@ -659,12 +701,10 @@ export default function DashboardPage() {
                             {c.person.first_name} {c.person.last_name}
                           </span>
                           {c.person.medical_notes && (
-                            <span
-                              title={c.person.medical_notes}
+                            <span title={c.person.medical_notes}
                               className="inline-flex items-center justify-center w-4 h-4 rounded-full
                                 bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400
-                                flex-shrink-0 cursor-help"
-                            >
+                                flex-shrink-0 cursor-help">
                               <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                               </svg>
@@ -720,9 +760,160 @@ export default function DashboardPage() {
                           onDelete={() => setPendingDelete(c.id)}
                           onDeleteConfirm={() => deleteCheckin({ variables: { checkinId: c.id } })}
                           onCancel={() => { setPendingDelete(null); setPendingCheckout(null) }}
+                          onReprint={() => printCheckinLabel(c, showCheckout)}
+                          onEdit={() => { setEditCheckin({ id: c.id, guardianName: c.guardian_name ?? '', guardianPhone: c.guardian_phone ?? '', serviceId: c.service.id }); setExpandedId(c.id) }}
                         />
                       </td>
                     </tr>
+
+                    {/* Expanded detail + edit row */}
+                    {isExpanded && (
+                      <tr className="bg-[var(--primary)]/5">
+                        <td colSpan={colSpan} className="px-4 pb-4 pt-2">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                            {/* Child info */}
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Child Details</p>
+                              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                                <div>
+                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Age</p>
+                                  <p className="text-[var(--foreground)] font-medium">
+                                    {calcAge(c.person.date_of_birth) != null ? `${calcAge(c.person.date_of_birth)} yrs` : '—'}
+                                    {c.person.date_of_birth ? <span className="text-[var(--muted-foreground)] font-normal ml-1 text-xs">({fmtDate(c.person.date_of_birth)})</span> : ''}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Class</p>
+                                  <p className="text-[var(--foreground)] font-medium">{c.classGroup?.name ?? '—'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Family</p>
+                                  <p className="text-[var(--foreground)] font-medium">{c.person.household?.last_name ?? '—'}</p>
+                                  {c.person.household?.phone && <p className="text-xs text-[var(--muted-foreground)]">{c.person.household.phone}</p>}
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Total Visits</p>
+                                  <p className="text-[var(--foreground)] font-medium">{c.person.checkins_count ?? 0}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Last Visit</p>
+                                  <p className="text-[var(--foreground)] font-medium">{fmtDate(c.person.last_checkin_at)}</p>
+                                </div>
+                              </div>
+                              {c.person.medical_notes && (
+                                <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
+                                  <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">Medical Notes</p>
+                                  <p className="text-xs text-amber-800 dark:text-amber-300">{c.person.medical_notes}</p>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => printCheckinLabel(c, showCheckout)}
+                                className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg border border-[var(--border)]
+                                  bg-[var(--card)] text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                Reprint Sticker
+                              </button>
+                            </div>
+
+                            {/* Edit check-in */}
+                            <div>
+                              <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">
+                                {isEditing ? 'Edit Check-In' : 'Check-In Info'}
+                              </p>
+                              {isEditing ? (
+                                <form onSubmit={handleSaveEdit} className="space-y-2">
+                                  <div>
+                                    <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian Name</label>
+                                    <input
+                                      value={editCheckin.guardianName}
+                                      onChange={e => setEditCheckin(p => ({ ...p, guardianName: e.target.value }))}
+                                      placeholder="Guardian name"
+                                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
+                                        text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]
+                                        focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian Phone</label>
+                                    <input
+                                      value={editCheckin.guardianPhone}
+                                      onChange={e => setEditCheckin(p => ({ ...p, guardianPhone: e.target.value }))}
+                                      placeholder="Guardian phone"
+                                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
+                                        text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]
+                                        focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</label>
+                                    <select
+                                      value={editCheckin.serviceId}
+                                      onChange={e => setEditCheckin(p => ({ ...p, serviceId: e.target.value }))}
+                                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
+                                        text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors"
+                                    >
+                                      {allServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                  </div>
+                                  <div className="flex gap-2 pt-1">
+                                    <button type="button" onClick={() => setEditCheckin(null)}
+                                      className="flex-1 py-2 rounded-lg border border-[var(--border)] text-xs
+                                        text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors">
+                                      Cancel
+                                    </button>
+                                    <button type="submit" disabled={editSaving}
+                                      className="flex-1 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
+                                        text-xs font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50 transition-colors">
+                                      {editSaving ? 'Saving…' : 'Save Changes'}
+                                    </button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <div className="space-y-2 text-sm">
+                                  <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+                                    <div>
+                                      <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian</p>
+                                      <p className="text-[var(--foreground)]">{c.guardian_name || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Phone</p>
+                                      <p className="text-[var(--foreground)]">{c.guardian_phone || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</p>
+                                      <p className="text-[var(--foreground)]">{c.service.name}</p>
+                                    </div>
+                                    {showCheckout && c.pickup_code && (
+                                      <div>
+                                        <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Code</p>
+                                        <p className="font-mono font-bold text-[var(--primary)] tracking-widest">{c.pickup_code}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => setEditCheckin({ id: c.id, guardianName: c.guardian_name ?? '', guardianPhone: c.guardian_phone ?? '', serviceId: c.service.id })}
+                                    className="flex items-center gap-2 mt-1 px-3 py-1.5 rounded-lg border border-[var(--border)]
+                                      bg-[var(--card)] text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                    Edit Details
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -784,7 +975,7 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
 }
 
 function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deleting, checkingOut,
-  onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel }) {
+  onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel, onReprint, onEdit }) {
   if (isCheckingOut) return (
     <div className="flex items-center justify-end gap-1">
       <button onClick={onCheckoutConfirm} disabled={checkingOut}
@@ -811,6 +1002,22 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
   )
   return (
     <div className="flex items-center justify-end gap-0.5 sm:opacity-0 sm:[tr:hover_&]:opacity-100 transition-opacity">
+      <button onClick={onEdit} title="Edit check-in"
+        className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+          hover:bg-[var(--muted)] transition-colors">
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+      </button>
+      <button onClick={onReprint} title="Reprint sticker"
+        className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+          hover:bg-[var(--muted)] transition-colors">
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        </svg>
+      </button>
       {showCheckout && isActive && (
         <button onClick={onCheckout} title="Check out"
           className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--primary)]

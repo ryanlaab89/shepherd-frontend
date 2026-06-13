@@ -175,8 +175,17 @@ export const TODAY_CHECKINS_QUERY = gql`
       checked_in_at
       checked_out_at
       classGroup { id name }
-      person { id first_name last_name }
       service { id name }
+      person {
+        id
+        first_name
+        last_name
+        date_of_birth
+        medical_notes
+        checkins_count
+        last_checkin_at
+        household { id last_name phone }
+      }
     }
   }
 `
