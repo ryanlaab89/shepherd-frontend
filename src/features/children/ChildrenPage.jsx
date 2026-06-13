@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useLazyQuery } from '@apollo/client'
-import { CHILDREN_QUERY, CHILD_CHECKINS_QUERY, CLASSES_QUERY } from '@/graphql/queries'
+import { CHILDREN_QUERY, CHILD_CHECKINS_QUERY, CLASSES_QUERY, ME_QUERY } from '@/graphql/queries'
 import { UPDATE_PERSON_MUTATION, DELETE_CHILD_MUTATION } from '@/graphql/mutations'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -30,6 +30,7 @@ export default function ChildrenPage() {
 
   const { data, loading, refetch } = useQuery(CHILDREN_QUERY, { fetchPolicy: 'cache-and-network' })
   const { data: classData } = useQuery(CLASSES_QUERY)
+  const { data: meData } = useQuery(ME_QUERY)
 
   const [search,        setSearch]        = useState('')
   const [filterClass,   setFilterClass]   = useState('')
@@ -146,6 +147,79 @@ export default function ChildrenPage() {
     a.click(); URL.revokeObjectURL(url)
   }
 
+  function printChildren() {
+    const churchName = meData?.me?.church?.name ?? 'Kids Ministry'
+    const timeStr    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const dateStr    = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    const label      = search || filterClass ? ' (filtered)' : ''
+
+    const rows = filtered.map(c => {
+      const a = age(c.date_of_birth)
+      const medCell = c.medical_notes
+        ? `<td style="color:#d97706;font-size:11px">${c.medical_notes}</td>`
+        : `<td style="color:#94a3b8">—</td>`
+      return `<tr>
+        <td><strong>${c.first_name} ${c.last_name}</strong></td>
+        <td>${a != null ? a + ' yrs' : '—'}</td>
+        <td>${c.classGroup?.name ?? '—'}</td>
+        <td>${c.household?.last_name ?? '—'}</td>
+        <td>${c.household?.phone ?? '—'}</td>
+        ${medCell}
+        <td>${c.last_checkin_at ? fmt(c.last_checkin_at) : '—'}</td>
+        <td style="text-align:right;font-weight:700;color:#1A3A8C">${c.checkins_count ?? 0}</td>
+      </tr>`
+    }).join('')
+
+    const win = window.open('', '_blank')
+    win.document.write(`<!DOCTYPE html><html><head><title>Children Roster</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+      .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}
+      .header-left .org{font-size:11px;font-weight:700;color:#1A3A8C;text-transform:uppercase;letter-spacing:.1em}
+      .header-left .title{font-size:22px;font-weight:800;color:#0f172a;margin-top:2px}
+      .header-left .date{font-size:13px;color:#64748b;margin-top:3px}
+      .header-right{text-align:right;font-size:11px;color:#94a3b8;line-height:1.8}
+      .header-right strong{color:#64748b}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin-top:0}
+      th{text-align:left;padding:7px 10px;font-size:10px;font-weight:600;text-transform:uppercase;
+        letter-spacing:.05em;color:#64748b;background:#f8fafc;border-bottom:1.5px solid #e2e8f0}
+      td{padding:6px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+      tr:last-child td{border-bottom:none}
+      tr:nth-child(even) td{background:#fafafa}
+      .pbar{display:flex;gap:8px;margin-bottom:20px}
+      .pbtn{padding:8px 18px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600}
+      .pbtn-p{background:#1A3A8C;color:#fff;border:none}
+      .pbtn-c{background:#fff;border:1.5px solid #e2e8f0;color:#334155}
+      @media print{body{padding:16px}.pbar{display:none!important}}
+    </style></head><body>
+      <div class="pbar">
+        <button class="pbtn pbtn-p" onclick="window.print();window.onafterprint=function(){window.close()}">Print</button>
+        <button class="pbtn pbtn-c" onclick="window.close()">✕ Close</button>
+      </div>
+      <div class="header">
+        <div class="header-left">
+          <div class="org">${churchName}</div>
+          <div class="title">Children Roster${label}</div>
+          <div class="date">${dateStr}</div>
+        </div>
+        <div class="header-right">
+          <div>Printed: <strong>${timeStr}</strong></div>
+          <div>Total: <strong>${filtered.length} children</strong></div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>Age</th><th>Class</th><th>Family</th>
+            <th>Phone</th><th>Medical Notes</th><th>Last Visit</th><th style="text-align:right">Visits</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </body></html>`)
+    win.document.close()
+  }
+
   const checkins = checkinData?.childCheckins ?? []
 
   return (
@@ -159,16 +233,28 @@ export default function ChildrenPage() {
           </p>
         </div>
         {filtered.length > 0 && (
-          <button onClick={exportCSV}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
-              text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]
-              hover:border-[var(--primary)]/50 transition-colors flex-shrink-0">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={printChildren}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 transition-colors flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print
+            </button>
+            <button onClick={exportCSV}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 transition-colors flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+          </div>
         )}
       </div>
 
