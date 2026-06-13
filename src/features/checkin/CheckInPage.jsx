@@ -42,7 +42,7 @@ export default function CheckInPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[var(--foreground)]">Check In</h1>
         <p className="text-sm text-[var(--muted-foreground)] mt-1">
-          Search for a child or register a new family
+          Search for a child by name to get started with check-in
         </p>
       </div>
 

@@ -187,7 +187,18 @@ export default function AppLayout({ children }) {
       {/* Main nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleNav.map(({ to, label, icon }) => (
-          <NavLink key={to} to={to} className={navLinkClass} onClick={closeDrawer}>
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `${(to === '/checkin' || to === '/checkout') ? 'hidden md:flex' : 'flex'} items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-[var(--sidebar-primary)] text-[var(--sidebar-primary-foreground)]'
+                  : 'text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
+              }`
+            }
+            onClick={closeDrawer}
+          >
             {icon}{label}
           </NavLink>
         ))}
@@ -319,7 +330,45 @@ export default function AppLayout({ children }) {
         {sidebarContent}
       </aside>
 
-      <main className="flex-1 overflow-auto pt-14 md:pt-0">{children}</main>
+      <main className="flex-1 overflow-auto pt-14 pb-20 md:pt-0 md:pb-0">{children}</main>
+
+      {/* Mobile bottom tab bar — Check In / Check Out always visible */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 flex bg-[var(--sidebar)] border-t border-[var(--sidebar-border)]">
+        <NavLink
+          to="/checkin"
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors ${
+              isActive
+                ? 'bg-[var(--primary)] text-white'
+                : 'text-[var(--muted-foreground)]'
+            }`
+          }
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Check In</span>
+        </NavLink>
+        {showCheckout && (
+          <NavLink
+            to="/checkout"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors ${
+                isActive
+                  ? 'bg-[var(--primary)] text-white'
+                  : 'text-[var(--muted-foreground)]'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Check Out</span>
+          </NavLink>
+        )}
+      </div>
     </div>
   )
 }
