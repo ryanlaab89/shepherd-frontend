@@ -240,7 +240,36 @@ export default function AttendancePage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+        <>
+        {/* Mobile cards */}
+        <div className="md:hidden rounded-xl border border-[var(--border)] overflow-hidden divide-y divide-[var(--border)]">
+          {visible.map(log => (
+            <MobileAttendanceCard
+              key={log.id}
+              log={log}
+              showCheckout={showCheckout}
+              isSelecting={selected.has(log.id)}
+              isDeleting={pendingDelete === log.id}
+              isCheckingOut={pendingCheckout === log.id}
+              deletingLog={deletingLog}
+              checkingOut={checkingOut}
+              onToggle={toggleRow}
+              onExpand={() => setDetailLog(log)}
+              onCheckout={() => setPendingCheckout(log.id)}
+              onCheckoutConfirm={() => checkOut({ variables: { checkinId: log.id } })}
+              onDelete={() => setPendingDelete(log.id)}
+              onDeleteConfirm={() => deleteLog({ variables: { checkinId: log.id } })}
+              onCancel={() => { setPendingDelete(null); setPendingCheckout(null) }}
+            />
+          ))}
+          <div className="px-4 py-2 bg-[var(--muted)]/30 text-xs text-[var(--muted-foreground)]">
+            {visible.length} record{visible.length !== 1 ? 's' : ''}
+            {search || serviceId || classId ? ' (filtered)' : ''}
+          </div>
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block rounded-xl border border-[var(--border)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[700px]">
               <thead>
@@ -375,6 +404,7 @@ export default function AttendancePage() {
             {!isToday && <span className="italic">Historical record</span>}
           </div>
         </div>
+        </>
       )}
 
       {/* Details modal */}
@@ -404,12 +434,11 @@ function LogDetailsModal({ log, showCheckout, checkingOut, onCheckout, onClose }
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4
+      bg-black/50 backdrop-blur-sm" onClick={onClose}>
 
-      <div className="relative z-10 w-full max-w-md bg-[var(--card)] rounded-2xl shadow-2xl
-        border border-[var(--border)] overflow-hidden">
+      <div className="w-full max-w-md bg-[var(--card)] rounded-2xl shadow-2xl
+        border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
@@ -535,6 +564,200 @@ function LogDetailsModal({ log, showCheckout, checkingOut, onCheckout, onClose }
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function MobileAttendanceCard({
+  log, showCheckout, isSelecting, isDeleting, isCheckingOut,
+  deletingLog, checkingOut, onToggle, onExpand, onCheckout, onCheckoutConfirm,
+  onDelete, onDeleteConfirm, onCancel,
+}) {
+  const isActive = !log.checked_out_at
+  const logAge   = calcAge(log.person.date_of_birth)
+
+  return (
+    <div
+      onClick={e => { if (e.target.closest('button,input')) return; onExpand() }}
+      className={`p-4 transition-colors cursor-pointer ${
+        isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
+        isCheckingOut ? 'bg-[var(--primary)]/5' :
+        isSelecting   ? 'bg-[var(--primary)]/5' :
+        'bg-[var(--card)] active:bg-[var(--muted)]/40'
+      }`}>
+      <div className="flex items-start gap-3">
+        <input type="checkbox" checked={isSelecting} onChange={() => onToggle(log.id)}
+          onClick={e => e.stopPropagation()}
+          className="mt-1 rounded border-[var(--border)] accent-[var(--primary)] cursor-pointer flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-[var(--primary)]/15 flex items-center justify-center
+                text-xs font-bold text-[var(--primary)] flex-shrink-0">
+                {log.person.first_name[0]}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-semibold text-[var(--foreground)] text-sm truncate">
+                    {log.person.first_name} {log.person.last_name}
+                  </p>
+                  {log.person.medical_notes && (
+                    <span title={log.person.medical_notes}
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full
+                        bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400 flex-shrink-0">
+                      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  )}
+                  {showCheckout && (
+                    isActive
+                      ? <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5
+                          rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex-shrink-0">
+                          <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                          Here
+                        </span>
+                      : <span className="text-[10px] text-[var(--muted-foreground)]">
+                          Out {fmtTime(log.checked_out_at)}
+                        </span>
+                  )}
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">
+                  {log.service?.name}{log.classGroup ? ` · ${log.classGroup.name}` : ''}
+                  {logAge !== null ? ` · ${logAge} yrs` : ''}
+                </p>
+              </div>
+            </div>
+
+            {/* Confirm or kebab */}
+            {isCheckingOut ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={onCheckoutConfirm} disabled={checkingOut}
+                  className="px-2 py-1 rounded bg-[var(--primary)] text-[var(--primary-foreground)]
+                    text-[10px] font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50">
+                  {checkingOut ? '…' : 'Confirm'}
+                </button>
+                <button onClick={onCancel}
+                  className="px-2 py-1 rounded border border-[var(--border)] text-[10px]
+                    text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
+              </div>
+            ) : isDeleting ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={onDeleteConfirm} disabled={deletingLog}
+                  className="px-2 py-1 rounded bg-red-600 text-white text-[10px] font-semibold
+                    hover:bg-red-700 disabled:opacity-50">
+                  {deletingLog ? '…' : 'Remove'}
+                </button>
+                <button onClick={onCancel}
+                  className="px-2 py-1 rounded border border-[var(--border)] text-[10px]
+                    text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
+              </div>
+            ) : (
+              <MobileAttKebab
+                isActive={isActive}
+                showCheckout={showCheckout}
+                onExpand={onExpand}
+                onCheckout={onCheckout}
+                onDelete={onDelete}
+              />
+            )}
+          </div>
+
+          {/* Meta row */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--muted-foreground)]">
+            {log.guardian_name && <span>{log.guardian_name}</span>}
+            {showCheckout && log.pickup_code && (
+              <span className="font-mono font-bold text-[var(--primary)] tracking-widest">{log.pickup_code}</span>
+            )}
+            <span>{fmtTime(log.checked_in_at)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MobileAttKebab({ isActive, showCheckout, onExpand, onCheckout, onDelete }) {
+  const [open,    setOpen]    = useState(false)
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
+  const btnRef  = useRef(null)
+  const dropRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function close(e) {
+      if (btnRef.current?.contains(e.target)) return
+      if (dropRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
+    }
+  }, [open])
+
+  function handleOpen(e) {
+    e.stopPropagation()
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      const menuHeight = showCheckout && isActive ? 130 : 100
+      const top = window.innerHeight - rect.bottom >= menuHeight
+        ? rect.bottom + 4
+        : rect.top - menuHeight - 4
+      setDropPos({ top, right: window.innerWidth - rect.right })
+    }
+    setOpen(v => !v)
+  }
+
+  function act(fn) { setOpen(false); fn() }
+
+  return (
+    <div className="flex-shrink-0">
+      <button ref={btnRef} onClick={handleOpen}
+        className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+          hover:bg-[var(--muted)] transition-colors">
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+        </svg>
+      </button>
+      {open && (
+        <div ref={dropRef}
+          style={{ position: 'fixed', top: dropPos.top, right: dropPos.right }}
+          className="z-50 w-44 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg overflow-hidden">
+          <button onClick={() => act(onExpand)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors text-left">
+            <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View Details
+          </button>
+          {showCheckout && isActive && (
+            <button onClick={() => act(onCheckout)}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[var(--primary)]
+                hover:bg-[var(--primary)]/5 transition-colors text-left">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+              </svg>
+              Check Out
+            </button>
+          )}
+          <div className="border-t border-[var(--border)] my-0.5" />
+          <button onClick={() => act(onDelete)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-600 dark:text-red-400
+              hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDelete, onClear }) {
   return (

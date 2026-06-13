@@ -358,12 +358,12 @@ function ChildDetailsModal({ child, classes, checkins, checkinLoading, saving, i
   })()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4
+      bg-black/50 backdrop-blur-sm" onClick={onClose}>
 
-      <div className="relative z-10 w-full max-w-2xl bg-[var(--card)] rounded-2xl shadow-2xl
-        border border-[var(--border)] flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-[var(--card)] rounded-2xl shadow-2xl
+        border border-[var(--border)] flex flex-col max-h-[90vh]"
+        onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)] flex-shrink-0">

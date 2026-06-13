@@ -734,6 +734,7 @@ export default function DashboardPage() {
                 deleting={deleting}
                 checkingOut={checkingOut}
                 onToggle={toggleRow}
+                onExpand={() => setDetailCheckin(c)}
                 onCheckout={() => setPendingCheckout(c.id)}
                 onCheckoutConfirm={() => { checkOutMutation({ variables: { checkinId: c.id } }); setPendingCheckout(null) }}
                 onDelete={() => setPendingDelete(c.id)}
@@ -965,14 +966,12 @@ function DetailsModal({ c, showCheckout, editCheckin, editSaving, allServices, c
     focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4
+      bg-black/50 backdrop-blur-sm" onClick={onClose}>
 
       {/* Panel */}
-      <div className="relative z-10 w-full max-w-xl bg-[var(--card)] rounded-2xl shadow-2xl
-        border border-[var(--border)] overflow-hidden">
+      <div className="w-full max-w-xl bg-[var(--card)] rounded-2xl shadow-2xl
+        border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
@@ -1325,22 +1324,25 @@ function Spinner({ sm }) {
 
 function MobileCheckinCard({
   c, showCheckout, isSelecting, isDeleting, isCheckingOut,
-  deleting, checkingOut, onToggle, onCheckout, onCheckoutConfirm,
+  deleting, checkingOut, onToggle, onExpand, onCheckout, onCheckoutConfirm,
   onDelete, onDeleteConfirm, onCancel,
 }) {
   const isActive = !c.checked_out_at
   return (
-    <div className={`p-4 transition-colors ${
-      isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
-      isCheckingOut ? 'bg-[var(--primary)]/5' :
-      isSelecting   ? 'bg-[var(--primary)]/5' :
-      'bg-[var(--card)]'
-    }`}>
+    <div
+      onClick={e => { if (e.target.closest('button,input')) return; onExpand() }}
+      className={`p-4 transition-colors cursor-pointer ${
+        isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
+        isCheckingOut ? 'bg-[var(--primary)]/5' :
+        isSelecting   ? 'bg-[var(--primary)]/5' :
+        'bg-[var(--card)] active:bg-[var(--muted)]/40'
+      }`}>
       <div className="flex items-start gap-3">
         <input
           type="checkbox"
           checked={isSelecting}
           onChange={() => onToggle(c.id)}
+          onClick={e => e.stopPropagation()}
           className="mt-1 rounded border-[var(--border)] accent-[var(--primary)] cursor-pointer flex-shrink-0"
         />
         <div className="flex-1 min-w-0">
@@ -1383,27 +1385,37 @@ function MobileCheckinCard({
               </div>
             </div>
 
-            {/* Action buttons */}
-            {!isDeleting && !isCheckingOut && (
-              <div className="flex items-center gap-0.5 flex-shrink-0">
-                {showCheckout && isActive && (
-                  <button onClick={onCheckout} title="Check out"
-                    className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--primary)]
-                      hover:bg-[var(--primary)]/10 transition-colors">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
-                    </svg>
-                  </button>
-                )}
-                <button onClick={onDelete} title="Remove record"
-                  className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500
-                    hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+            {/* Kebab / confirm buttons */}
+            {isCheckingOut ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={onCheckoutConfirm} disabled={checkingOut}
+                  className="px-2 py-1 rounded bg-[var(--primary)] text-[var(--primary-foreground)]
+                    text-[10px] font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50">
+                  {checkingOut ? '…' : 'Confirm'}
                 </button>
+                <button onClick={onCancel}
+                  className="px-2 py-1 rounded border border-[var(--border)] text-[10px]
+                    text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
               </div>
+            ) : isDeleting ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={onDeleteConfirm} disabled={deleting}
+                  className="px-2 py-1 rounded bg-red-600 text-white text-[10px] font-semibold
+                    hover:bg-red-700 disabled:opacity-50">
+                  {deleting ? '…' : 'Remove'}
+                </button>
+                <button onClick={onCancel}
+                  className="px-2 py-1 rounded border border-[var(--border)] text-[10px]
+                    text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
+              </div>
+            ) : (
+              <MobileCardKebab
+                isActive={isActive}
+                showCheckout={showCheckout}
+                onExpand={onExpand}
+                onCheckout={onCheckout}
+                onDelete={onDelete}
+              />
             )}
           </div>
 
@@ -1418,33 +1430,93 @@ function MobileCheckinCard({
             <span>{fmtTime(c.checked_in_at)}</span>
           </div>
 
-          {/* Inline confirm */}
-          {isCheckingOut && (
-            <div className="mt-2 flex items-center gap-2">
-              <button onClick={onCheckoutConfirm} disabled={checkingOut}
-                className="px-3 py-1 rounded bg-[var(--primary)] text-[var(--primary-foreground)]
-                  text-xs font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50">
-                {checkingOut ? '…' : 'Confirm Check Out'}
-              </button>
-              <button onClick={onCancel}
-                className="px-2 py-1 rounded border border-[var(--border)] text-xs
-                  text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
-            </div>
-          )}
-          {isDeleting && (
-            <div className="mt-2 flex items-center gap-2">
-              <button onClick={onDeleteConfirm} disabled={deleting}
-                className="px-3 py-1 rounded bg-red-600 text-white text-xs font-semibold
-                  hover:bg-red-700 disabled:opacity-50">
-                {deleting ? '…' : 'Remove Record'}
-              </button>
-              <button onClick={onCancel}
-                className="px-2 py-1 rounded border border-[var(--border)] text-xs
-                  text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
-            </div>
-          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function MobileCardKebab({ isActive, showCheckout, onExpand, onCheckout, onDelete }) {
+  const [open,    setOpen]    = useState(false)
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
+  const btnRef  = useRef(null)
+  const dropRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function close(e) {
+      if (btnRef.current?.contains(e.target)) return
+      if (dropRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
+    }
+  }, [open])
+
+  function handleOpen(e) {
+    e.stopPropagation()
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      const menuHeight = showCheckout && isActive ? 130 : 100
+      const top = window.innerHeight - rect.bottom >= menuHeight
+        ? rect.bottom + 4
+        : rect.top - menuHeight - 4
+      setDropPos({ top, right: window.innerWidth - rect.right })
+    }
+    setOpen(v => !v)
+  }
+
+  function act(fn) { setOpen(false); fn() }
+
+  return (
+    <div className="flex-shrink-0">
+      <button ref={btnRef} onClick={handleOpen}
+        className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+          hover:bg-[var(--muted)] transition-colors">
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+        </svg>
+      </button>
+      {open && (
+        <div ref={dropRef}
+          style={{ position: 'fixed', top: dropPos.top, right: dropPos.right }}
+          className="z-50 w-44 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg overflow-hidden">
+          <button onClick={() => act(onExpand)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors text-left">
+            <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View Details
+          </button>
+          {showCheckout && isActive && (
+            <button onClick={() => act(onCheckout)}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[var(--primary)]
+                hover:bg-[var(--primary)]/5 transition-colors text-left">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+              </svg>
+              Check Out
+            </button>
+          )}
+          <div className="border-t border-[var(--border)] my-0.5" />
+          <button onClick={() => act(onDelete)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-600 dark:text-red-400
+              hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }
