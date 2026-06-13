@@ -580,20 +580,21 @@ export default function DashboardPage() {
                   : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
               >Summary</button>
             </div>
-            <button
-              onClick={printReport}
-              disabled={rawList.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
-                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50
-                disabled:opacity-40 transition-colors"
-              title="Print attendance report with summary + full children list"
-            >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              Print Report
-            </button>
+            <Tip text={rawList.length === 0 ? 'No check-ins yet today' : null}>
+              <button
+                onClick={printReport}
+                disabled={rawList.length === 0}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                  text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50
+                  disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Report
+              </button>
+            </Tip>
             {view === 'table' && checkins.length > 0 && (
               <button
                 onClick={exportCSV}
@@ -1757,5 +1758,19 @@ function SummaryView({ rawList, schedules, classMetaMap = {} }) {
         </>
       )}
     </div>
+  )
+}
+
+function Tip({ text, children }) {
+  if (!text) return children
+  return (
+    <span className="relative group/tip inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+        whitespace-nowrap rounded-lg bg-[var(--foreground)] text-[var(--background)]
+        text-xs px-2.5 py-1.5 opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-sm">
+        {text}
+      </span>
+    </span>
   )
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation } from '@apollo/client'
-import { ATTENDANCE_LOGS_QUERY, SERVICES_QUERY, CLASSES_QUERY, CHURCH_SETTINGS_QUERY } from '@/graphql/queries'
+import { ME_QUERY, ATTENDANCE_LOGS_QUERY, SERVICES_QUERY, CLASSES_QUERY, CHURCH_SETTINGS_QUERY } from '@/graphql/queries'
 import { CHECK_OUT_MUTATION, DELETE_CHECKIN_MUTATION } from '@/graphql/mutations'
 
 function toDateInput(date) { return date.toISOString().split('T')[0] }
@@ -49,6 +49,7 @@ export default function AttendancePage() {
   const { data: svcData } = useQuery(SERVICES_QUERY)
   const { data: clsData } = useQuery(CLASSES_QUERY)
   const { data: stgData } = useQuery(CHURCH_SETTINGS_QUERY, { fetchPolicy: 'cache-first' })
+  const { data: meData  } = useQuery(ME_QUERY)
 
   const [checkOut,  { loading: checkingOut }] = useMutation(CHECK_OUT_MUTATION,      { onCompleted: () => { setPendingCheckout(null); refetch() } })
   const [deleteLog, { loading: deletingLog }] = useMutation(DELETE_CHECKIN_MUTATION, { onCompleted: () => { setPendingDelete(null);   refetch() } })
@@ -128,7 +129,112 @@ export default function AttendancePage() {
     await refetch(); setSelected(new Set()); setBatchLoading(false)
   }
 
-  const isToday = date === today
+  const isToday    = date === today
+  const churchName = meData?.me?.church?.name ?? 'Kids Ministry'
+  const dateLabel  = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  })
+
+  function exportAttendanceCSV() {
+    if (!visible.length) return
+    const headers = showCheckout
+      ? ['Child', 'Age', 'Class', 'Guardian', 'Phone', 'Service', 'Code', 'In', 'Out']
+      : ['Child', 'Age', 'Class', 'Guardian', 'Phone', 'Service', 'In']
+    const rows = visible.map(l => {
+      const age = calcAge(l.person.date_of_birth)
+      const base = [
+        `${l.person.first_name} ${l.person.last_name}`,
+        age != null ? `${age} yrs` : '',
+        l.classGroup?.name ?? '',
+        l.guardian_name ?? '',
+        l.guardian_phone ?? '',
+        l.service?.name ?? '',
+      ]
+      if (showCheckout) base.push(l.pickup_code ?? '', fmtTime(l.checked_in_at) ?? '', fmtTime(l.checked_out_at) ?? '')
+      else              base.push(fmtTime(l.checked_in_at) ?? '')
+      return base
+    })
+    const csv  = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `attendance-${date}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function printAttendance() {
+    if (!visible.length) return
+    const timeStr    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const outHeader  = showCheckout ? '<th>Out</th>' : ''
+
+    function childRow(l) {
+      const age = calcAge(l.person.date_of_birth)
+      const outCell = showCheckout
+        ? `<td>${l.checked_out_at ? fmtTime(l.checked_out_at) : '<span class="here">Here</span>'}</td>`
+        : ''
+      return `<tr>
+        <td><strong>${l.person.first_name} ${l.person.last_name}</strong>${l.person.medical_notes ? ' <span class="med">⚠</span>' : ''}</td>
+        <td>${age != null ? `${age} yrs` : '—'}</td>
+        <td>${l.classGroup?.name ?? '—'}</td>
+        <td>${l.guardian_name ?? '—'}</td>
+        <td>${l.guardian_phone ?? '—'}</td>
+        <td>${l.service?.name ?? '—'}</td>
+        <td>${fmtTime(l.checked_in_at)}</td>
+        ${outCell}
+      </tr>`
+    }
+
+    const win = window.open('', '_blank')
+    win.document.write(`<!DOCTYPE html><html><head><title>Attendance — ${dateLabel}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+      .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}
+      .header-left .org{font-size:11px;font-weight:700;color:#1A3A8C;text-transform:uppercase;letter-spacing:.1em}
+      .header-left .title{font-size:22px;font-weight:800;color:#0f172a;margin-top:2px}
+      .header-left .date{font-size:13px;color:#64748b;margin-top:3px}
+      .header-right{text-align:right;font-size:11px;color:#94a3b8;line-height:1.8}
+      .header-right strong{color:#64748b}
+      .stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}
+      .stat{flex:1;min-width:100px;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 16px}
+      .stat .num{font-size:26px;font-weight:800;color:#1A3A8C}
+      .stat .lbl{font-size:11px;color:#64748b;margin-top:1px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{text-align:left;padding:7px 10px;font-size:10px;font-weight:600;text-transform:uppercase;
+        letter-spacing:.05em;color:#64748b;background:#f8fafc;border-bottom:1.5px solid #e2e8f0}
+      td{padding:6px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+      tr:last-child td{border-bottom:none}
+      .here{display:inline-block;padding:1px 6px;border-radius:10px;background:#dcfce7;color:#16a34a;font-size:10px;font-weight:600}
+      .med{color:#d97706;font-size:11px}
+      @media print{body{padding:16px}}
+    </style></head><body>
+      <div class="header">
+        <div class="header-left">
+          <div class="org">${churchName}</div>
+          <div class="title">Attendance</div>
+          <div class="date">${dateLabel}</div>
+        </div>
+        <div class="header-right">
+          <div>Printed: <strong>${timeStr}</strong></div>
+          <div>Total: <strong>${visible.length}</strong></div>
+          ${showCheckout ? `<div>Still Here: <strong>${active}</strong></div>` : ''}
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="num">${visible.length}</div><div class="lbl">Total</div></div>
+        ${showCheckout ? `
+        <div class="stat"><div class="num">${active}</div><div class="lbl">Still Here</div></div>
+        <div class="stat"><div class="num">${checkedOut}</div><div class="lbl">Checked Out</div></div>` : ''}
+      </div>
+      <table>
+        <thead><tr><th>Child</th><th>Age</th><th>Class</th><th>Guardian</th><th>Phone</th><th>Service</th><th>In</th>${outHeader}</tr></thead>
+        <tbody>${visible.map(childRow).join('')}</tbody>
+      </table>
+      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
+    </body></html>`)
+    win.document.close()
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -143,7 +249,7 @@ export default function AttendancePage() {
             })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!isToday && (
             <button onClick={() => setDate(today)}
               className="px-3 py-2 rounded-lg border border-[var(--border)] text-sm
@@ -153,6 +259,30 @@ export default function AttendancePage() {
           )}
           <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)}
             className={selectClass + ' cursor-pointer'} />
+          <Tip text={visible.length === 0 ? 'No records to print' : null}>
+            <button onClick={printAttendance} disabled={visible.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print
+            </button>
+          </Tip>
+          <Tip text={visible.length === 0 ? 'No records to export' : null}>
+            <button onClick={exportAttendanceCSV} disabled={visible.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              CSV
+            </button>
+          </Tip>
         </div>
       </div>
 
@@ -950,5 +1080,19 @@ function Spinner({ sm }) {
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
+  )
+}
+
+function Tip({ text, children }) {
+  if (!text) return children
+  return (
+    <span className="relative group/tip inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+        whitespace-nowrap rounded-lg bg-[var(--foreground)] text-[var(--background)]
+        text-xs px-2.5 py-1.5 opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-sm">
+        {text}
+      </span>
+    </span>
   )
 }

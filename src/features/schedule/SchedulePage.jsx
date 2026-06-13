@@ -261,32 +261,36 @@ export default function SchedulePage() {
             className="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)]
               text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
-          <button
-            onClick={printSchedule}
-            disabled={!schedules.length}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
-              text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
-              hover:border-[var(--primary)]/50 disabled:opacity-40 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print Schedule
-          </button>
-          <button
-            onClick={exportScheduleCSV}
-            disabled={!schedules.length}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
-              text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
-              hover:border-[var(--primary)]/50 disabled:opacity-40 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export CSV
-          </button>
+          <Tip text={!schedules.length ? 'No assignments for this date' : null}>
+            <button
+              onClick={printSchedule}
+              disabled={!schedules.length}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Schedule
+            </button>
+          </Tip>
+          <Tip text={!schedules.length ? 'No assignments for this date' : null}>
+            <button
+              onClick={exportScheduleCSV}
+              disabled={!schedules.length}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+          </Tip>
         </div>
       )}
 
@@ -556,5 +560,19 @@ export default function SchedulePage() {
         </div>
       )}
     </div>
+  )
+}
+
+function Tip({ text, children }) {
+  if (!text) return children
+  return (
+    <span className="relative group/tip inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+        whitespace-nowrap rounded-lg bg-[var(--foreground)] text-[var(--background)]
+        text-xs px-2.5 py-1.5 opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-sm">
+        {text}
+      </span>
+    </span>
   )
 }
