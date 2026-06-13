@@ -198,7 +198,7 @@ export default function SearchStep({ onSelectPerson }) {
           <p className="text-sm text-[var(--foreground)] font-medium">
             No results for <span className="text-[var(--primary)]">"{query}"</span>
           </p>
-          <p className="text-xs text-[var(--muted-foreground)]">First time here? Register below.</p>
+          <p className="text-xs text-[var(--muted-foreground)]">First time here? Register a new child below.</p>
           <button
             onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--primary)]
@@ -207,7 +207,7 @@ export default function SearchStep({ onSelectPerson }) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            Register New Family
+            Register Child
           </button>
         </div>
       )}

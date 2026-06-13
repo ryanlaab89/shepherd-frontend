@@ -36,10 +36,10 @@ export default function DashboardPage() {
   const prevServiceRef = useRef(null)
   const navigate = useNavigate()
 
-  const { data: classData  } = useQuery(TODAY_CLASS_SESSIONS_QUERY, { pollInterval: 60000 })
+  const { data: classData  } = useQuery(TODAY_CLASS_SESSIONS_QUERY, { fetchPolicy: 'cache-and-network', pollInterval: 60000 })
   const { data: usersData  } = useQuery(USERS_QUERY)
   const { data: servicesData } = useQuery(SERVICES_QUERY)
-  const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY, { fetchPolicy: 'cache-first' })
+  const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY)
 
   const classes    = classData?.todayClassSessions ?? []
   const staffList  = usersData?.users ?? []
@@ -47,7 +47,7 @@ export default function DashboardPage() {
   const showCheckout = (settingsData?.churchSettings?.show_checkout ?? true) ||
                        (settingsData?.churchSettings?.require_checkout ?? false)
 
-  const { data: todayData, loading, refetch } = useQuery(TODAY_CHECKINS_QUERY, { pollInterval: 15000 })
+  const { data: todayData, loading, refetch } = useQuery(TODAY_CHECKINS_QUERY, { fetchPolicy: 'cache-and-network', pollInterval: 30000 })
   const rawList = todayData?.todayCheckins ?? []
 
   // Stats derived from live data
@@ -217,18 +217,18 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className={`grid gap-4 mb-8 ${showCheckout ? 'grid-cols-3' : 'grid-cols-1 max-w-xs'}`}>
+      <div className={`grid gap-2 sm:gap-4 mb-8 ${showCheckout ? 'grid-cols-3' : 'grid-cols-1 max-w-xs'}`}>
         <StatCard label="Checked In Today" value={loading ? '—' : totalToday} color="primary"
-          icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          icon={<svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
         {showCheckout && <>
           <StatCard label="Still Here" value={loading ? '—' : currentlyIn} color="accent"
-            icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            icon={<svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} />
           <StatCard label="Checked Out" value={loading ? '—' : checkedOut} color="muted"
-            icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            icon={<svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>} />
         </>}
       </div>
@@ -276,7 +276,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-[var(--foreground)]">
             {showCheckout ? "Today's Attendance" : "Today's Attendance"}
           </h2>
-          <span className="text-xs text-[var(--muted-foreground)]">Auto-refreshes every 15s</span>
+          <span className="text-xs text-[var(--muted-foreground)]">Auto-refreshes every 30s</span>
         </div>
 
         {/* Filters */}
@@ -596,12 +596,12 @@ function StatCard({ label, value, icon, color }) {
     muted:   'bg-[var(--muted)] text-[var(--muted-foreground)]',
   }
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-[var(--muted-foreground)]">{label}</span>
-        <div className={`p-2 rounded-lg ${colors[color]}`}>{icon}</div>
+    <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 sm:p-5">
+      <div className="flex items-start justify-between mb-2 sm:mb-3 gap-1">
+        <span className="text-[11px] sm:text-sm text-[var(--muted-foreground)] leading-tight">{label}</span>
+        <div className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${colors[color]}`}>{icon}</div>
       </div>
-      <p className="text-3xl font-bold text-[var(--foreground)]">{value}</p>
+      <p className="text-2xl sm:text-3xl font-bold text-[var(--foreground)]">{value}</p>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useQuery, useMutation, useLazyQuery } from '@apollo/client'
 import { CHILDREN_QUERY, CHILD_CHECKINS_QUERY, CLASSES_QUERY } from '@/graphql/queries'
 import { UPDATE_PERSON_MUTATION, DELETE_CHILD_MUTATION } from '@/graphql/mutations'
@@ -213,9 +213,8 @@ export default function ChildrenPage() {
                 const childAge = age(child.date_of_birth)
 
                 return (
-                  <>
+                  <Fragment key={child.id}>
                     <tr
-                      key={child.id}
                       onClick={() => toggleExpand(child.id)}
                       className={`border-b border-[var(--border)] cursor-pointer transition-colors
                         ${isOpen
@@ -262,7 +261,7 @@ export default function ChildrenPage() {
 
                     {/* Expanded detail row */}
                     {isOpen && (
-                      <tr key={`${child.id}-detail`} className="bg-[var(--primary)]/5">
+                      <tr className="bg-[var(--primary)]/5">
                         <td colSpan={6} className="px-4 pb-5 pt-2">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -439,7 +438,7 @@ export default function ChildrenPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>
