@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@apollo/client'
-import { SERVICES_QUERY, CLASSES_QUERY } from '@/graphql/queries'
+import { SERVICES_QUERY, CLASSES_QUERY, PERSON_GUARDIANS_QUERY } from '@/graphql/queries'
+import PhoneInput from '@/components/PhoneInput'
 import { CHECK_IN_MUTATION } from '@/graphql/mutations'
 import { useState, useEffect } from 'react'
 import { detectActiveService, fmtServiceTime } from '@/lib/serviceUtils'
@@ -37,6 +38,7 @@ function ageRangeLabel(cls) {
 export default function ServiceStep({ person, household, initialGuardianName = '', initialGuardianPhone = '', onDone, onBack }) {
   const { data: svcData, loading: svcLoading } = useQuery(SERVICES_QUERY)
   const { data: clsData }                      = useQuery(CLASSES_QUERY)
+  const { data: guardiansData }                = useQuery(PERSON_GUARDIANS_QUERY, { variables: { personId: person.id } })
   const [checkIn, { loading: checking }]       = useMutation(CHECK_IN_MUTATION)
 
   const [error,            setError]         = useState('')
@@ -47,9 +49,10 @@ export default function ServiceStep({ person, household, initialGuardianName = '
   const [guardianName,     setGuardianName]  = useState(initialGuardianName)
   const [guardianPhone,    setGuardianPhone] = useState(initialGuardianPhone || household?.phone || '')
 
-  const services = svcData?.services ?? []
-  const classes  = clsData?.classes  ?? []
-  const childAge = calcAge(person.date_of_birth)
+  const services          = svcData?.services               ?? []
+  const classes           = clsData?.classes                ?? []
+  const previousGuardians = guardiansData?.personGuardians  ?? []
+  const childAge          = calcAge(person.date_of_birth)
 
   useEffect(() => {
     if (!services.length) return
@@ -218,6 +221,31 @@ export default function ServiceStep({ person, household, initialGuardianName = '
         <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
           Today's Guardian
         </p>
+
+        {previousGuardians.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-[var(--foreground)] mb-1">Previous guardian</label>
+            <select
+              defaultValue=""
+              onChange={e => {
+                const g = previousGuardians.find(g => g.guardian_name === e.target.value)
+                if (g) {
+                  setGuardianName(g.guardian_name)
+                  setGuardianPhone(g.guardian_phone ?? '')
+                }
+              }}
+              className={inputClass}
+            >
+              <option value="" disabled>Select a previous guardian…</option>
+              {previousGuardians.map(g => (
+                <option key={g.guardian_name} value={g.guardian_name}>
+                  {g.guardian_name}{g.guardian_phone ? ` · ${g.guardian_phone}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-[var(--foreground)] mb-1">Name</label>
@@ -231,12 +259,9 @@ export default function ServiceStep({ person, household, initialGuardianName = '
           </div>
           <div>
             <label className="block text-xs font-medium text-[var(--foreground)] mb-1">Phone</label>
-            <input
-              type="tel"
+            <PhoneInput
               value={guardianPhone}
-              onChange={e => setGuardianPhone(e.target.value)}
-              placeholder="555-1234"
-              className={inputClass}
+              onChange={setGuardianPhone}
             />
           </div>
         </div>

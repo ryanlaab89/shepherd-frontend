@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useMutation } from '@apollo/client'
 import { REGISTER_CHILD_MUTATION, ADD_CHILD_MUTATION } from '@/graphql/mutations'
+import { isValidPhone } from '@/lib/validators'
+import PhoneInput from '@/components/PhoneInput'
 
 export default function QuickRegisterStep({ mode = 'new', household, prefillFirstName = '', onDone, onBack }) {
   const [form, setForm] = useState({
@@ -26,6 +28,12 @@ export default function QuickRegisterStep({ mode = 'new', household, prefillFirs
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+
+    if (!isValidPhone(form.guardian_phone)) {
+      setError('Please enter a valid phone number (at least 7 digits).')
+      return
+    }
+
     try {
       if (mode === 'new') {
         const { data } = await registerChild({
@@ -107,13 +115,10 @@ export default function QuickRegisterStep({ mode = 'new', household, prefillFirs
               />
             </Field>
             <Field label="Parent Phone *">
-              <input
+              <PhoneInput
                 required
-                type="tel"
                 value={form.guardian_phone}
-                onChange={set('guardian_phone')}
-                className={input}
-                placeholder="555-1234"
+                onChange={val => setForm(f => ({ ...f, guardian_phone: val }))}
               />
             </Field>
           </div>

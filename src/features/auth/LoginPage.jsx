@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { API_BASE as API } from '@/lib/apiUrl'
+import { isStrongPassword, PASSWORD_HINT } from '@/lib/validators'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -44,6 +45,16 @@ export default function LoginPage() {
   async function handleRegister(e) {
     e.preventDefault()
     setError('')
+
+    if (!isStrongPassword(registerForm.password)) {
+      setError(PASSWORD_HINT)
+      return
+    }
+    if (registerForm.password !== registerForm.password_confirmation) {
+      setError('Passwords do not match.')
+      return
+    }
+
     setLoading(true)
     try {
       const res = await fetch(`${API}/api/auth/register`, {
@@ -160,7 +171,7 @@ export default function LoginPage() {
                   />
                 </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Password">
+                  <Field label="Password" hint={PASSWORD_HINT}>
                     <PasswordInput
                       value={registerForm.password}
                       onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))}
@@ -223,11 +234,12 @@ function PasswordInput({ value, onChange, autoComplete }) {
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, hint, children }) {
   return (
     <div>
       <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">{label}</label>
       {children}
+      {hint && <p className="text-[11px] text-[var(--muted-foreground)] mt-1">{hint}</p>}
     </div>
   )
 }

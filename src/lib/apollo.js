@@ -34,6 +34,6 @@ export default new ApolloClient({
   // Static data (services, users, classes, settings) use cache-first.
   // Queries that need live data override with cache-and-network + pollInterval.
   defaultOptions: {
-    watchQuery: { fetchPolicy: 'cache-first' },
+    watchQuery: { fetchPolicy: 'cache-and-network' },
   },
 })

@@ -4,6 +4,7 @@ import { useQuery } from '@apollo/client'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useTheme } from '@/features/theme/ThemeContext'
 import { CHURCH_SETTINGS_QUERY } from '@/graphql/queries'
+import CommandPalette from '@/components/CommandPalette'
 
 import { API_BASE as API } from '@/lib/apiUrl'
 
@@ -137,6 +138,18 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate()
   const isAdmin = user?.role === 'ADMIN'
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [cmdOpen, setCmdOpen] = useState(false)
+
+  useEffect(() => {
+    function handleKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCmdOpen(v => !v)
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [])
 
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY, { fetchPolicy: 'cache-and-network' })
 
@@ -193,6 +206,25 @@ export default function AppLayout({ children }) {
           <p className="text-sm font-semibold text-[var(--sidebar-foreground)] truncate">Shepherd</p>
           <p className="text-xs text-[var(--muted-foreground)] truncate">{user?.church?.name}</p>
         </div>
+      </div>
+
+      {/* Search shortcut */}
+      <div className="px-3 pt-3 pb-1">
+        <button
+          onClick={() => setCmdOpen(true)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--sidebar-border)]
+            text-[var(--muted-foreground)] hover:text-[var(--sidebar-foreground)] hover:border-[var(--sidebar-accent)]
+            transition-colors text-xs"
+        >
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="hidden lg:flex items-center gap-0.5 border border-[var(--sidebar-border)] rounded px-1 py-0.5 text-[9px] font-mono">
+            ⌘K
+          </kbd>
+        </button>
       </div>
 
       {/* Main nav */}
@@ -321,6 +353,17 @@ export default function AppLayout({ children }) {
             </p>
           )}
         </div>
+        <button
+          onClick={() => setCmdOpen(true)}
+          className="ml-auto p-1.5 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--sidebar-accent)]
+            hover:text-[var(--sidebar-foreground)] transition-colors"
+          aria-label="Search (Ctrl+K)"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
       </div>
 
       {/* Mobile backdrop */}
@@ -342,6 +385,8 @@ export default function AppLayout({ children }) {
       </aside>
 
       <main className="flex-1 overflow-auto pt-14 pb-20 md:pt-0 md:pb-0">{children}</main>
+
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       {/* Mobile bottom tab bar — Check In / Check Out always visible */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 flex bg-[var(--sidebar)] border-t border-[var(--sidebar-border)]">

@@ -10,9 +10,12 @@ import {
   DELETE_USER_MUTATION,
 } from '@/graphql/mutations'
 import { useAuth } from '@/features/auth/AuthContext'
+import { isStrongPassword, PASSWORD_HINT } from '@/lib/validators'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function UsersPage() {
   const { user: me } = useAuth()
+  const toast = useToast()
   const { data, loading, refetch } = useQuery(USERS_QUERY)
   const [createUser]    = useMutation(CREATE_USER_MUTATION,    { onCompleted: () => refetch() })
   const [updateRole]    = useMutation(UPDATE_USER_ROLE_MUTATION, { onCompleted: () => refetch() })
@@ -31,6 +34,10 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState({ name: '', email: '', newPassword: '' })
   const [editError, setEditError] = useState('')
   const [editSaving, setEditSaving] = useState(false)
+
+  // confirm state: { type: 'toggle'|'delete', user }
+  const [confirmState, setConfirmState] = useState(null)
+  const [confirmLoading, setConfirmLoading] = useState(false)
 
   const users = data?.users ?? []
 
@@ -52,11 +59,16 @@ export default function UsersPage() {
   async function handleCreate(e) {
     e.preventDefault()
     setError('')
+    if (!isStrongPassword(form.password)) {
+      setError(PASSWORD_HINT)
+      return
+    }
     setSaving(true)
     try {
       await createUser({ variables: { input: form } })
       setForm({ name: '', email: '', password: '', role: 'VOLUNTEER' })
       setShowForm(false)
+      toast?.success(`${form.name} added`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -68,7 +80,7 @@ export default function UsersPage() {
     try {
       await updateRole({ variables: { userId, role: newRole } })
     } catch (err) {
-      alert(err.message)
+      toast?.error(err.message)
     }
   }
 
@@ -84,13 +96,14 @@ export default function UsersPage() {
         },
       })
       if (editForm.newPassword.trim()) {
-        if (editForm.newPassword.length < 8) {
-          setEditError('New password must be at least 8 characters.')
+        if (!isStrongPassword(editForm.newPassword)) {
+          setEditError(PASSWORD_HINT)
           setEditSaving(false)
           return
         }
         await resetPassword({ variables: { userId: editId, password: editForm.newPassword } })
       }
+      toast?.success('Changes saved')
       closeEdit()
     } catch (err) {
       setEditError(err.message)
@@ -99,22 +112,31 @@ export default function UsersPage() {
     }
   }
 
-  async function handleToggleActive(u) {
-    const action = u.is_active ? 'disable' : 'enable'
-    if (!confirm(`${action === 'disable' ? 'Disable' : 'Re-enable'} ${u.name}'s account?`)) return
-    try {
-      await setUserActive({ variables: { userId: u.id, active: !u.is_active } })
-    } catch (err) {
-      alert(err.message)
-    }
+  function handleToggleActive(u) {
+    setConfirmState({ type: 'toggle', user: u })
   }
 
-  async function handleDelete(userId, name) {
-    if (!confirm(`Permanently delete ${name}? This cannot be undone.`)) return
+  function handleDelete(userId, name) {
+    setConfirmState({ type: 'delete', user: { id: userId, name } })
+  }
+
+  async function confirmAction() {
+    setConfirmLoading(true)
     try {
-      await deleteUser({ variables: { userId } })
+      if (confirmState.type === 'toggle') {
+        const { user: u } = confirmState
+        await setUserActive({ variables: { userId: u.id, active: !u.is_active } })
+        toast?.success(`${u.name}'s account ${u.is_active ? 'disabled' : 're-enabled'}`)
+      } else {
+        await deleteUser({ variables: { userId: confirmState.user.id } })
+        toast?.success(`${confirmState.user.name} deleted`)
+      }
+      setConfirmState(null)
     } catch (err) {
-      alert(err.message)
+      toast?.error(err.message)
+      setConfirmState(null)
+    } finally {
+      setConfirmLoading(false)
     }
   }
 
@@ -161,7 +183,7 @@ export default function UsersPage() {
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Password">
+              <Field label="Password" hint={PASSWORD_HINT}>
                 <input required type="password" value={form.password} onChange={set('password')}
                   className={input} placeholder="Min. 8 characters" minLength={8} />
               </Field>
@@ -320,7 +342,7 @@ export default function UsersPage() {
                           className={input} />
                       </Field>
                     </div>
-                    <Field label="New Password (leave blank to keep current)">
+                    <Field label="New Password (leave blank to keep current)" hint={PASSWORD_HINT}>
                       <input type="password" value={editForm.newPassword}
                         onChange={e => setEditForm(f => ({ ...f, newPassword: e.target.value }))}
                         className={input} placeholder="Min. 8 characters" minLength={8} />
@@ -342,6 +364,55 @@ export default function UsersPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmState && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setConfirmState(null)}>
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl
+            animate-in fade-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}>
+            {confirmState.type === 'toggle' ? (
+              <>
+                <h2 className="text-base font-semibold text-[var(--foreground)] mb-2">
+                  {confirmState.user.is_active ? 'Disable account?' : 'Re-enable account?'}
+                </h2>
+                <p className="text-sm text-[var(--muted-foreground)] mb-5">
+                  {confirmState.user.is_active
+                    ? `${confirmState.user.name} will no longer be able to sign in.`
+                    : `${confirmState.user.name} will be able to sign in again.`}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-base font-semibold text-[var(--foreground)] mb-2">
+                  Delete {confirmState.user.name}?
+                </h2>
+                <p className="text-sm text-[var(--muted-foreground)] mb-5">
+                  This will permanently remove their account. This cannot be undone.
+                </p>
+              </>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={confirmAction}
+                disabled={confirmLoading}
+                className={`flex-1 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 transition-colors
+                  ${confirmState.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}
+              >
+                {confirmLoading ? '…' : confirmState.type === 'delete' ? 'Delete' : confirmState.user.is_active ? 'Disable' : 'Enable'}
+              </button>
+              <button
+                onClick={() => setConfirmState(null)}
+                className="flex-1 py-2 rounded-lg border border-[var(--border)] text-sm
+                  text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -379,11 +450,12 @@ function RoleBadge({ role }) {
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, hint, children }) {
   return (
     <div>
       <label className="block text-xs font-medium text-[var(--foreground)] mb-1.5">{label}</label>
       {children}
+      {hint && <p className="text-[11px] text-[var(--muted-foreground)] mt-1">{hint}</p>}
     </div>
   )
 }

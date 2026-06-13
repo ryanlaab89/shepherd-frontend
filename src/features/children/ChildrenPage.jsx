@@ -3,6 +3,7 @@ import { useQuery, useMutation, useLazyQuery } from '@apollo/client'
 import { CHILDREN_QUERY, CHILD_CHECKINS_QUERY, CLASSES_QUERY } from '@/graphql/queries'
 import { UPDATE_PERSON_MUTATION, DELETE_CHILD_MUTATION } from '@/graphql/mutations'
 import { useAuth } from '@/features/auth/AuthContext'
+import { useToast } from '@/contexts/ToastContext'
 
 function age(dob) {
   if (!dob) return null
@@ -25,6 +26,7 @@ const inputClass =
 
 export default function ChildrenPage() {
   const { user } = useAuth()
+  const toast = useToast()
   const isAdmin = user?.role === 'ADMIN'
 
   const { data, loading, refetch } = useQuery(CHILDREN_QUERY, { fetchPolicy: 'cache-and-network' })
@@ -129,6 +131,7 @@ export default function ChildrenPage() {
           },
         },
       })
+      toast?.success('Changes saved')
       setEditingId(null)
       refetch()
     } catch (e) {
@@ -139,12 +142,42 @@ export default function ChildrenPage() {
   async function handleDelete(personId) {
     try {
       await deleteChild({ variables: { personId } })
+      toast?.success('Child record deleted')
       setConfirmDelete(null)
       setExpandedId(null)
       refetch()
     } catch (e) {
-      alert(e.message)
+      toast?.error(e.message)
+      setConfirmDelete(null)
     }
+  }
+
+  function exportCSV() {
+    const headers = ['First Name', 'Last Name', 'Age', 'Class', 'Family', 'Phone', 'Medical Notes', 'Last Visit', 'Total Visits']
+    const rows = filtered.map(c => {
+      const a = age(c.date_of_birth)
+      return [
+        c.first_name,
+        c.last_name ?? '',
+        a != null ? String(a) : '',
+        c.classGroup?.name ?? '',
+        c.household?.last_name ?? '',
+        c.household?.phone ?? '',
+        c.medical_notes ?? '',
+        c.last_checkin_at ? fmt(c.last_checkin_at) : '',
+        String(c.checkins_count ?? 0),
+      ]
+    })
+    const csv = [headers, ...rows]
+      .map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `children-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const checkins = checkinData?.childCheckins ?? []
@@ -152,11 +185,27 @@ export default function ChildrenPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--foreground)]">Children</h1>
-        <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
-          {children.length} registered · click a row to view details
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">Children</h1>
+          <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
+            {children.length} registered · click a row to view details
+          </p>
+        </div>
+        {filtered.length > 0 && (
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+              text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:border-[var(--primary)]/50 transition-colors flex-shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export CSV
+          </button>
+        )}
       </div>
 
       {/* Filters */}

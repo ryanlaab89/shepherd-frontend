@@ -55,6 +55,15 @@ export const CLASSES_QUERY = gql`
   }
 `
 
+export const PERSON_GUARDIANS_QUERY = gql`
+  query PersonGuardians($personId: ID!) {
+    personGuardians(personId: $personId) {
+      guardian_name
+      guardian_phone
+    }
+  }
+`
+
 export const TODAY_CLASS_SESSIONS_QUERY = gql`
   query TodayClassSessions {
     todayClassSessions {

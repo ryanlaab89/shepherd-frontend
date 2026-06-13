@@ -12,6 +12,7 @@ export default function CheckInPage() {
   const [household,     setHousehold]     = useState(null)
   const [checkin,       setCheckin]       = useState(null)
   const [initGuardian,  setInitGuardian]  = useState({ name: '', phone: '' })
+  const [siblingQuery,  setSiblingQuery]  = useState('')
 
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY, { fetchPolicy: 'cache-first' })
   const showCheckout = settingsData?.churchSettings?.show_checkout ?? true
@@ -22,6 +23,15 @@ export default function CheckInPage() {
     setHousehold(null)
     setCheckin(null)
     setInitGuardian({ name: '', phone: '' })
+    setSiblingQuery('')
+  }
+
+  function onSiblingCheckIn(h) {
+    setSiblingQuery(h.last_name ?? '')
+    setPerson(null)
+    setCheckin(null)
+    setInitGuardian({ name: '', phone: '' })
+    setStep('search')
   }
 
   // guardianName / guardianPhone supplied by SearchStep for new registrations; omitted for existing children.
@@ -55,7 +65,7 @@ export default function CheckInPage() {
 
       <div className="mt-8">
         {step === 'search' && (
-          <SearchStep onSelectPerson={onSelectPerson} />
+          <SearchStep onSelectPerson={onSelectPerson} initialQuery={siblingQuery} />
         )}
 
         {step === 'service' && (
@@ -74,6 +84,8 @@ export default function CheckInPage() {
             checkin={checkin}
             showCheckout={showCheckout}
             onAnother={reset}
+            household={household}
+            onSiblingCheckIn={onSiblingCheckIn}
           />
         )}
       </div>

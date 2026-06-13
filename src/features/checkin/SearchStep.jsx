@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client'
 import { SEARCH_CHILDREN_QUERY, CLASSES_QUERY } from '@/graphql/queries'
 import { REGISTER_CHILD_MUTATION, UPDATE_PERSON_MUTATION } from '@/graphql/mutations'
+import { isValidPhone } from '@/lib/validators'
+import PhoneInput from '@/components/PhoneInput'
 
 function calcAge(dob) {
   if (!dob) return null
@@ -14,8 +16,8 @@ function calcAge(dob) {
 }
 
 // onSelectPerson(person, guardianName?, guardianPhone?) — extra args supplied for new registrations
-export default function SearchStep({ onSelectPerson }) {
-  const [query, setQuery]   = useState('')
+export default function SearchStep({ onSelectPerson, initialQuery = '' }) {
+  const [query, setQuery]   = useState(initialQuery)
   const [showForm, setShowForm] = useState(false)
   const debounceRef = useRef(null)
 
@@ -26,6 +28,13 @@ export default function SearchStep({ onSelectPerson }) {
   const [editId, setEditId] = useState(null)
 
   const searched = called && !loading
+
+  // Auto-search when initialQuery provided (sibling shortcut)
+  useEffect(() => {
+    if (initialQuery.trim().length >= 2) {
+      search({ variables: { query: initialQuery.trim() } })
+    }
+  }, []) // eslint-disable-line
 
   // Sync results from query, but also allow local updates after inline edit
   useEffect(() => {
@@ -350,6 +359,12 @@ function InlineRegisterForm({ prefillFirstName, onDone, onCancel, registerChild,
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+
+    if (!isValidPhone(form.guardian_phone)) {
+      setError('Please enter a valid phone number (at least 7 digits).')
+      return
+    }
+
     try {
       const { data } = await registerChild({
         variables: {
@@ -402,8 +417,11 @@ function InlineRegisterForm({ prefillFirstName, onDone, onCancel, registerChild,
               className={inputClass} placeholder="Smith" />
           </Field>
           <Field label="Guardian Phone *">
-            <input required type="tel" value={form.guardian_phone} onChange={set('guardian_phone')}
-              className={inputClass} placeholder="555-1234" />
+            <PhoneInput
+              required
+              value={form.guardian_phone}
+              onChange={val => setForm(f => ({ ...f, guardian_phone: val }))}
+            />
           </Field>
         </div>
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/features/auth/AuthContext'
 import { ThemeProvider } from '@/features/theme/ThemeContext'
+import { ToastProvider } from '@/contexts/ToastContext'
 import LoginPage from '@/features/auth/LoginPage'
 import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/features/dashboard/DashboardPage'
@@ -38,6 +39,7 @@ export default function App() {
     <BrowserRouter>
       <ThemeProvider>
       <AuthProvider>
+      <ToastProvider>
         <Routes>
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route
@@ -65,6 +67,7 @@ export default function App() {
             }
           />
         </Routes>
+      </ToastProvider>
       </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
