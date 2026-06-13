@@ -3,13 +3,35 @@ import { useMutation } from '@apollo/client'
 import { UPDATE_PROFILE_MUTATION } from '@/graphql/mutations'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useTheme } from '@/features/theme/ThemeContext'
+import { useToast } from '@/contexts/ToastContext'
+import { API_BASE as API } from '@/lib/apiUrl'
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth()
+  const { user, updateUser, logout, token } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const toast = useToast()
 
   const [updateProfile] = useMutation(UPDATE_PROFILE_MUTATION)
   const fileInputRef = useRef(null)
+
+  const [revoking, setRevoking] = useState(false)
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
+
+  async function handleRevokeAll() {
+    setRevoking(true)
+    try {
+      await fetch(`${API}/api/auth/logout-all`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      toast?.success('All sessions signed out.')
+      logout()
+    } catch {
+      toast?.error('Could not revoke sessions. Try again.')
+      setRevoking(false)
+      setConfirmRevoke(false)
+    }
+  }
 
   // Avatar
   const [photoPreview,  setPhotoPreview]  = useState(user?.photo ?? null)
@@ -318,6 +340,45 @@ export default function ProfilePage() {
               {infoSaving ? 'Saving…' : 'Save Changes'}
             </button>
           </form>
+        </div>
+      </section>
+
+      {/* Sessions */}
+      <section className="rounded-xl border border-[var(--destructive)]/30 bg-[var(--card)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border)]">
+          <h2 className="text-sm font-semibold text-[var(--foreground)]">Sessions</h2>
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Sign out of all devices — use this if you think your account may be compromised.
+          </p>
+        </div>
+        <div className="p-5">
+          {confirmRevoke ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-sm text-[var(--foreground)]">Sign out of all sessions, including this one?</p>
+              <div className="flex items-center gap-2">
+                <button onClick={handleRevokeAll} disabled={revoking}
+                  className="px-4 py-2 rounded-lg bg-[var(--destructive)] text-white text-sm font-semibold
+                    hover:bg-[var(--destructive)]/90 disabled:opacity-60 transition-colors">
+                  {revoking ? 'Signing out…' : 'Yes, sign out all'}
+                </button>
+                <button onClick={() => setConfirmRevoke(false)} disabled={revoking}
+                  className="px-4 py-2 rounded-lg border border-[var(--border)] text-sm
+                    text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmRevoke(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[var(--destructive)]/40
+                text-sm font-medium text-[var(--destructive)] hover:bg-[var(--destructive)]/5 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign out of all sessions
+            </button>
+          )}
         </div>
       </section>
 
