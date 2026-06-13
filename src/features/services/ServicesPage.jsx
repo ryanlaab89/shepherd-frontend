@@ -6,12 +6,15 @@ import {
   UPDATE_SERVICE_MUTATION,
   DELETE_SERVICE_MUTATION,
 } from '@/graphql/mutations'
+import { useToast } from '@/contexts/ToastContext'
+import { ActionSheet, ActionSheetItem } from '@/components/ui/ActionSheet'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 const BLANK = { name: '', day_of_week: 'Sunday', start_time: '', end_time: '' }
 
 export default function ServicesPage() {
+  const toast = useToast()
   const { data, loading, refetch } = useQuery(SERVICES_QUERY)
   const [createService] = useMutation(CREATE_SERVICE_MUTATION, { onCompleted: () => refetch() })
   const [updateService] = useMutation(UPDATE_SERVICE_MUTATION, { onCompleted: () => refetch() })
@@ -22,6 +25,13 @@ export default function ServicesPage() {
   const [form, setForm] = useState(BLANK)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // mobile action sheet
+  const [sheetFor, setSheetFor] = useState(null)
+
+  // delete confirm
+  const [confirmState, setConfirmState] = useState(null) // { service }
+  const [confirmLoading, setConfirmLoading] = useState(false)
 
   const services = data?.services ?? []
 
@@ -72,12 +82,22 @@ export default function ServicesPage() {
     }
   }
 
-  async function handleDelete(id, name) {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+  function handleDelete(svc) {
+    setSheetFor(null)
+    setConfirmState({ service: svc })
+  }
+
+  async function confirmAction() {
+    setConfirmLoading(true)
     try {
-      await deleteService({ variables: { id } })
+      await deleteService({ variables: { id: confirmState.service.id } })
+      toast?.success(`"${confirmState.service.name}" deleted`)
+      setConfirmState(null)
     } catch (err) {
-      alert(err.message)
+      toast?.error(err.message)
+      setConfirmState(null)
+    } finally {
+      setConfirmLoading(false)
     }
   }
 
@@ -132,7 +152,10 @@ export default function ServicesPage() {
                   />
                 </div>
               ) : (
-                <div className="flex items-center gap-4 px-4 py-3">
+                <div
+                  className="flex items-center gap-4 px-4 py-3 cursor-pointer md:cursor-default"
+                  onClick={() => { if (window.innerWidth < 768) setSheetFor(svc) }}
+                >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[var(--foreground)]">{svc.name}</p>
                     <div className="flex items-center gap-3 mt-0.5">
@@ -155,7 +178,8 @@ export default function ServicesPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  {/* Desktop-only action buttons */}
+                  <div className="hidden md:flex items-center gap-1">
                     <button
                       onClick={() => startEdit(svc)}
                       className="p-1.5 rounded-lg text-[var(--muted-foreground)]
@@ -168,7 +192,7 @@ export default function ServicesPage() {
                       </svg>
                     </button>
                     <button
-                      onClick={() => handleDelete(svc.id, svc.name)}
+                      onClick={() => handleDelete(svc)}
                       className="p-1.5 rounded-lg text-[var(--muted-foreground)]
                         hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)] transition-colors"
                       title="Delete"
@@ -193,6 +217,73 @@ export default function ServicesPage() {
           will be pre-selected. Set both start and end times to enable this.
         </p>
       </div>
+
+      {/* Mobile action sheet */}
+      <ActionSheet
+        open={!!sheetFor}
+        onClose={() => setSheetFor(null)}
+        title={sheetFor?.name}
+      >
+        <ActionSheetItem
+          label="Edit"
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          }
+          onClick={() => { startEdit(sheetFor); setSheetFor(null) }}
+        />
+        <ActionSheetItem
+          label="Delete"
+          destructive
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          }
+          onClick={() => handleDelete(sheetFor)}
+        />
+      </ActionSheet>
+
+      {/* Delete confirm modal */}
+      {confirmState && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setConfirmState(null)}
+        >
+          <div
+            className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6
+              max-w-sm w-full mx-4 shadow-xl animate-in fade-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-base font-semibold text-[var(--foreground)] mb-2">
+              Delete &quot;{confirmState.service.name}&quot;?
+            </h2>
+            <p className="text-sm text-[var(--muted-foreground)] mb-5">
+              This will permanently remove this service. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmAction}
+                disabled={confirmLoading}
+                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white
+                  text-sm font-medium disabled:opacity-50 transition-colors"
+              >
+                {confirmLoading ? '…' : 'Delete'}
+              </button>
+              <button
+                onClick={() => setConfirmState(null)}
+                className="flex-1 py-2 rounded-lg border border-[var(--border)] text-sm
+                  text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

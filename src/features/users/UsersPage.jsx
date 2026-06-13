@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@apollo/client'
 import { USERS_QUERY } from '@/graphql/queries'
+import { ActionSheet, ActionSheetItem } from '@/components/ui/ActionSheet'
 import {
   CREATE_USER_MUTATION,
   UPDATE_USER_ROLE_MUTATION,
@@ -38,6 +39,9 @@ export default function UsersPage() {
   // confirm state: { type: 'toggle'|'delete', user }
   const [confirmState, setConfirmState] = useState(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
+
+  // mobile action sheet
+  const [sheetFor, setSheetFor] = useState(null)
 
   const users = data?.users ?? []
 
@@ -220,7 +224,10 @@ export default function UsersPage() {
             <div key={u.id} className={`rounded-xl border bg-[var(--card)] transition-colors
               ${u.is_active ? 'border-[var(--border)]' : 'border-[var(--border)] opacity-60'}`}>
               {/* Row */}
-              <div className="flex items-center gap-3 px-4 py-3">
+              <div
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer md:cursor-default"
+                onClick={() => { if (window.innerWidth < 768 && u.id !== me?.id) setSheetFor(u) }}
+              >
                 {/* Avatar */}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center
                   text-xs font-bold flex-shrink-0
@@ -248,7 +255,7 @@ export default function UsersPage() {
                 </div>
 
                 {/* Role */}
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0" onClick={e => e.stopPropagation()}>
                   {u.id === me?.id ? (
                     <RoleBadge role={u.role} />
                   ) : (
@@ -266,9 +273,9 @@ export default function UsersPage() {
                   )}
                 </div>
 
-                {/* Actions */}
+                {/* Actions — desktop only */}
                 {u.id !== me?.id && (
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="hidden md:flex items-center gap-1 flex-shrink-0">
                     {/* Edit */}
                     <button
                       onClick={() => editId === u.id ? closeEdit() : openEdit(u)}
@@ -366,6 +373,50 @@ export default function UsersPage() {
           ))}
         </div>
       )}
+
+      {/* Mobile action sheet */}
+      <ActionSheet
+        open={!!sheetFor}
+        onClose={() => setSheetFor(null)}
+        title={sheetFor?.name}
+      >
+        <ActionSheetItem
+          label="Edit"
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          }
+          onClick={() => { openEdit(sheetFor); setSheetFor(null) }}
+        />
+        <ActionSheetItem
+          label={sheetFor?.is_active ? 'Disable account' : 'Enable account'}
+          icon={sheetFor?.is_active ? (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          ) : (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+          onClick={() => { handleToggleActive(sheetFor); setSheetFor(null) }}
+        />
+        <ActionSheetItem
+          label="Delete"
+          destructive
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          }
+          onClick={() => { handleDelete(sheetFor?.id, sheetFor?.name); setSheetFor(null) }}
+        />
+      </ActionSheet>
 
       {/* Confirm modal */}
       {confirmState && (

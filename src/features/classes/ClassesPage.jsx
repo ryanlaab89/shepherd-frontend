@@ -5,6 +5,8 @@ import {
   CREATE_CLASS_MUTATION, UPDATE_CLASS_MUTATION, DELETE_CLASS_MUTATION,
   ASSIGN_CHILD_TO_CLASS_MUTATION,
 } from '@/graphql/mutations'
+import { useToast } from '@/contexts/ToastContext'
+import { ActionSheet, ActionSheetItem } from '@/components/ui/ActionSheet'
 
 export default function ClassesPage() {
   const [showForm, setShowForm] = useState(false)
@@ -57,10 +59,20 @@ export default function ClassesPage() {
 }
 
 function ClassCard({ cls, onEdit }) {
-  const [section, setSection] = useState(null) // 'teachers' | 'children' | null
+  const [section, setSection] = useState(null) // 'children' | null
+  const [sheetOpen, setSheetOpen] = useState(false)
+
+  function toggleChildren(e) {
+    e.stopPropagation()
+    setSection(s => s === 'children' ? null : 'children')
+  }
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+    <div
+      className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden
+        cursor-pointer md:cursor-default"
+      onClick={() => { if (window.innerWidth < 768) setSheetOpen(true) }}
+    >
       {/* Header */}
       <div className="p-5 flex items-center justify-between">
         <div>
@@ -80,14 +92,19 @@ function ClassCard({ cls, onEdit }) {
             <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{cls.description}</p>
           )}
           <div className="flex items-center gap-4 mt-2">
-            <button onClick={() => setSection(s => s === 'children' ? null : 'children')}
-              className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
+            <button
+              onClick={toggleChildren}
+              className="text-xs text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+            >
               {cls.people.length} children
             </button>
           </div>
         </div>
-        <button onClick={onEdit}
-          className="p-2 rounded-lg hover:bg-[var(--muted)] transition-colors text-[var(--muted-foreground)]">
+        {/* Edit pencil — desktop only */}
+        <button
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          className="hidden md:block p-2 rounded-lg hover:bg-[var(--muted)] transition-colors text-[var(--muted-foreground)]"
+        >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -95,7 +112,42 @@ function ClassCard({ cls, onEdit }) {
         </button>
       </div>
 
-      {section === 'children' && <ChildrenPanel cls={cls} />}
+      {/* Children panel — stopPropagation so tapping inside doesn't re-open the sheet */}
+      {section === 'children' && (
+        <div onClick={e => e.stopPropagation()}>
+          <ChildrenPanel cls={cls} />
+        </div>
+      )}
+
+      {/* Mobile action sheet */}
+      <ActionSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title={cls.name}
+      >
+        <ActionSheetItem
+          label="Edit class"
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          }
+          onClick={() => { onEdit(); setSheetOpen(false) }}
+        />
+        <ActionSheetItem
+          label={section === 'children'
+            ? `Hide children (${cls.people.length})`
+            : `Manage children (${cls.people.length})`}
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          }
+          onClick={() => { setSection(s => s === 'children' ? null : 'children'); setSheetOpen(false) }}
+        />
+      </ActionSheet>
     </div>
   )
 }
@@ -138,13 +190,16 @@ function ChildrenPanel({ cls }) {
 }
 
 function ClassFormModal({ editing, onClose }) {
+  const toast = useToast()
   const [form, setForm]   = useState({
     name:        editing?.name        ?? '',
     min_age:     editing?.min_age     ?? '',
     max_age:     editing?.max_age     ?? '',
     description: editing?.description ?? '',
   })
-  const [error, setError] = useState('')
+  const [error, setError]           = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [createClass, { loading: creating }] = useMutation(CREATE_CLASS_MUTATION, {
     refetchQueries: [{ query: CLASSES_QUERY }],
@@ -154,9 +209,8 @@ function ClassFormModal({ editing, onClose }) {
     refetchQueries: [{ query: CLASSES_QUERY }],
     onCompleted: onClose,
   })
-  const [deleteClass, { loading: deleting }] = useMutation(DELETE_CLASS_MUTATION, {
+  const [deleteClass] = useMutation(DELETE_CLASS_MUTATION, {
     refetchQueries: [{ query: CLASSES_QUERY }],
-    onCompleted: onClose,
   })
 
   const saving = creating || updating
@@ -181,12 +235,16 @@ function ClassFormModal({ editing, onClose }) {
     }
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete "${editing.name}"? This cannot be undone.`)) return
+  async function handleConfirmDelete() {
+    setDeleteLoading(true)
     try {
       await deleteClass({ variables: { id: editing.id } })
+      toast?.success(`"${editing.name}" deleted`)
+      onClose()
     } catch (e) {
-      setError(e.message)
+      toast?.error(e.message)
+      setDeleteLoading(false)
+      setConfirmDelete(false)
     }
   }
 
@@ -196,63 +254,94 @@ function ClassFormModal({ editing, onClose }) {
       <div className="relative bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-md p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-[var(--foreground)]">
-            {editing ? 'Edit Class' : 'New Class'}
+            {confirmDelete ? `Delete "${editing?.name}"?` : editing ? 'Edit Class' : 'New Class'}
           </h2>
-          <button onClick={onClose} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          <button
+            onClick={confirmDelete ? () => setConfirmDelete(false) : onClose}
+            className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {error && (
-          <div className="p-3 rounded-lg bg-[var(--destructive)]/10 text-[var(--destructive)] text-sm">{error}</div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <Field label="Class Name *">
-            <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className={inputClass} placeholder="Kids" autoFocus />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Min Age">
-              <input type="number" min="0" max="30" value={form.min_age}
-                onChange={e => setForm(f => ({ ...f, min_age: e.target.value }))}
-                className={inputClass} placeholder="6" />
-            </Field>
-            <Field label="Max Age">
-              <input type="number" min="0" max="30" value={form.max_age}
-                onChange={e => setForm(f => ({ ...f, max_age: e.target.value }))}
-                className={inputClass} placeholder="11" />
-            </Field>
-          </div>
-
-          <Field label="Description">
-            <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className={inputClass} placeholder="Optional note for staff" />
-          </Field>
-
-          <div className="flex gap-2 pt-2">
-            {editing && (
-              <button type="button" onClick={handleDelete} disabled={deleting}
-                className="px-4 py-2.5 rounded-lg border border-[var(--destructive)]/40 text-[var(--destructive)]
-                  text-sm hover:bg-[var(--destructive)]/10 transition-colors disabled:opacity-50">
-                {deleting ? 'Deleting…' : 'Delete'}
+        {confirmDelete ? (
+          <>
+            <p className="text-sm text-[var(--muted-foreground)]">
+              All children assignments and schedule entries for this class will be removed.
+              This cannot be undone.
+            </p>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white
+                  text-sm font-medium disabled:opacity-50 transition-colors"
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete'}
               </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 py-2.5 rounded-lg border border-[var(--border)] text-sm
+                  text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {error && (
+              <div className="p-3 rounded-lg bg-[var(--destructive)]/10 text-[var(--destructive)] text-sm">{error}</div>
             )}
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-[var(--border)]
-                text-sm text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
-                text-sm font-semibold hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-60">
-              {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Class'}
-            </button>
-          </div>
-        </form>
+
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Field label="Class Name *">
+                <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className={inputClass} placeholder="Kids" autoFocus />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Min Age">
+                  <input type="number" min="0" max="30" value={form.min_age}
+                    onChange={e => setForm(f => ({ ...f, min_age: e.target.value }))}
+                    className={inputClass} placeholder="6" />
+                </Field>
+                <Field label="Max Age">
+                  <input type="number" min="0" max="30" value={form.max_age}
+                    onChange={e => setForm(f => ({ ...f, max_age: e.target.value }))}
+                    className={inputClass} placeholder="11" />
+                </Field>
+              </div>
+
+              <Field label="Description">
+                <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  className={inputClass} placeholder="Optional note for staff" />
+              </Field>
+
+              <div className="flex gap-2 pt-2">
+                {editing && (
+                  <button type="button" onClick={() => setConfirmDelete(true)}
+                    className="px-4 py-2.5 rounded-lg border border-[var(--destructive)]/40 text-[var(--destructive)]
+                      text-sm hover:bg-[var(--destructive)]/10 transition-colors">
+                    Delete
+                  </button>
+                )}
+                <button type="button" onClick={onClose}
+                  className="flex-1 py-2.5 rounded-lg border border-[var(--border)]
+                    text-sm text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={saving}
+                  className="flex-1 py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
+                    text-sm font-semibold hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-60">
+                  {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Class'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   )
