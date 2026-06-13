@@ -9,6 +9,7 @@ import {
   SERVICES_QUERY,
   USERS_QUERY,
   SCHEDULES_QUERY,
+  ME_QUERY,
 } from '@/graphql/queries'
 import {
   SET_CLASS_SESSION_MUTATION,
@@ -64,6 +65,7 @@ export default function DashboardPage() {
   const { data: servicesData } = useQuery(SERVICES_QUERY)
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY)
   const { data: schedulesData } = useQuery(SCHEDULES_QUERY, { variables: { date: today }, fetchPolicy: 'cache-and-network' })
+  const { data: meData } = useQuery(ME_QUERY)
 
   const classes    = classData?.todayClassSessions ?? []
   const staffList  = usersData?.users ?? []
@@ -294,12 +296,15 @@ export default function DashboardPage() {
   }
 
   function printReport() {
-    const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    const churchName = meData?.me?.church?.name ?? 'Kids Ministry'
+    const dateStr    = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    const timeStr    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
     const servicesInData = Array.from(new Map(rawList.map(c => [c.service.id, c.service])).values())
       .sort((a, b) => a.name.localeCompare(b.name))
 
     function summarise(rows, svcId) {
-      const r = svcId ? rows.filter(c => c.service.id === svcId) : rows
+      const r   = svcId ? rows.filter(c => c.service.id === svcId) : rows
       const sch = svcId ? schedules.filter(s => s.service?.id === svcId) : schedules
       const byClass = {}
       r.forEach(c => { const n = c.classGroup?.name ?? 'Unassigned'; byClass[n] = (byClass[n] || 0) + 1 })
@@ -308,7 +313,7 @@ export default function DashboardPage() {
         stillHere: r.filter(c => !c.checked_out_at).length,
         checkedOut: r.filter(c => c.checked_out_at).length,
         byClass,
-        guardians: new Set(r.filter(c => c.guardian_name).map(c => c.guardian_name)).size,
+        guardians:  new Set(r.filter(c => c.guardian_name).map(c => c.guardian_name)).size,
         volunteers: new Set(sch.map(s => s.user.id)).size,
       }
     }
@@ -318,15 +323,14 @@ export default function DashboardPage() {
 
     function classRows(byClass) {
       const order = [...CLASS_ORDER, ...Object.keys(byClass).filter(k => !CLASS_ORDER.includes(k))]
-      return order
-        .filter(k => byClass[k])
-        .map(k => `<tr><td>${k}${AGE_RANGES[k] ? ` <span class="age">(${AGE_RANGES[k]})</span>` : ''}</td><td>${byClass[k]}</td></tr>`)
+      return order.filter(k => byClass[k])
+        .map(k => `<tr><td>${k}${AGE_RANGES[k] ? ` <span class="age">(${AGE_RANGES[k]})</span>` : ''}</td><td class="num-cell">${byClass[k]}</td></tr>`)
         .join('')
     }
 
-    function card(title, s) {
+    function summaryCard(title, s, highlight) {
       return `
-        <div class="card">
+        <div class="card${highlight ? ' card-highlight' : ''}">
           <h3>${title}</h3>
           <div class="trio">
             <div class="stat"><div class="num">${s.total}</div><div class="lbl">Total Kids</div></div>
@@ -338,41 +342,127 @@ export default function DashboardPage() {
             <thead><tr><th>Age Group</th><th>Kids</th></tr></thead>
             <tbody>${classRows(s.byClass)}</tbody>
           </table>` : ''}
-          <div class="footer-stats">
-            <span>👨‍👩‍👧 Guardians: <strong>${s.guardians}</strong></span>
-            <span>🙋 Volunteers: <strong>${s.volunteers}</strong></span>
+          <div class="footer-row">
+            <span>Guardians: <strong>${s.guardians}</strong></span>
+            <span>Volunteers: <strong>${s.volunteers}</strong></span>
           </div>
         </div>`
     }
 
-    const allDay = summarise(rawList, null)
-    const svcCards = servicesInData.map(s => card(s.name, summarise(rawList, s.id))).join('')
+    // Detailed children list grouped by service
+    function childRow(c) {
+      const outCell = showCheckout
+        ? `<td>${c.checked_out_at ? new Date(c.checked_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="here">Here</span>'}</td>`
+        : ''
+      return `<tr>
+        <td><strong>${c.person.first_name} ${c.person.last_name}</strong>${c.person.medical_notes ? ' <span class="med">⚠</span>' : ''}</td>
+        <td>${c.classGroup?.name ?? '—'}</td>
+        <td>${c.guardian_name ?? '—'}</td>
+        <td>${c.guardian_phone ?? '—'}</td>
+        <td>${new Date(c.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        ${outCell}
+      </tr>`
+    }
+
+    function serviceDetailSection(svc) {
+      const rows = rawList.filter(c => c.service.id === svc.id)
+        .sort((a, b) => `${a.person.first_name} ${a.person.last_name}`.localeCompare(`${b.person.first_name} ${b.person.last_name}`))
+      const outHeader = showCheckout ? '<th>Out</th>' : ''
+      return `
+        <div class="detail-section">
+          <div class="svc-header">
+            <span class="svc-name">${svc.name}</span>
+            <span class="svc-count">${rows.length} children</span>
+          </div>
+          <table class="detail-table">
+            <thead><tr><th>Child</th><th>Class</th><th>Guardian</th><th>Phone</th><th>In</th>${outHeader}</tr></thead>
+            <tbody>${rows.map(childRow).join('')}</tbody>
+          </table>
+        </div>`
+    }
+
+    const allDay     = summarise(rawList, null)
+    const svcCards   = servicesInData.map(s => summaryCard(s.name, summarise(rawList, s.id), false)).join('')
+    const detailSections = servicesInData.map(serviceDetailSection).join('')
 
     const win = window.open('', '_blank')
-    win.document.write(`<!DOCTYPE html><html><head><title>Attendance Report</title><style>
+    win.document.write(`<!DOCTYPE html><html><head><title>Attendance Report — ${dateStr}</title><style>
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
-      *{margin:0;padding:0;box-sizing:border-box} body{font-family:'Plus Jakarta Sans',sans-serif;padding:32px;color:#0f172a}
-      h1{font-size:22px;font-weight:800;margin-bottom:4px} .sub{color:#64748b;font-size:13px;margin-bottom:24px}
-      h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1A3A8C;margin:24px 0 12px}
-      .card{border:1.5px solid #e2e8f0;border-radius:12px;padding:18px;break-inside:avoid;margin-bottom:14px}
-      .card h3{font-size:15px;font-weight:700;margin-bottom:12px;color:#0f172a}
-      .trio{display:flex;gap:12px;margin-bottom:14px}
-      .stat{flex:1;background:#f8fafc;border-radius:8px;padding:10px;text-align:center}
-      .num{font-size:24px;font-weight:800;color:#1A3A8C} .lbl{font-size:11px;color:#64748b;margin-top:2px}
-      .ag{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px}
-      .ag th{text-align:left;padding:6px 8px;background:#f1f5f9;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-      .ag td{padding:5px 8px;border-top:1px solid #f1f5f9} .age{color:#94a3b8;font-size:11px}
-      .footer-stats{display:flex;gap:16px;font-size:12px;color:#64748b;padding-top:8px;border-top:1px solid #f1f5f9}
-      .footer-stats strong{color:#0f172a}
-      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-      @media print{body{padding:16px}}
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Plus Jakarta Sans',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+
+      /* Header */
+      .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}
+      .header-left .org{font-size:11px;font-weight:700;color:#1A3A8C;text-transform:uppercase;letter-spacing:.1em}
+      .header-left .title{font-size:22px;font-weight:800;color:#0f172a;margin-top:2px}
+      .header-left .date{font-size:13px;color:#64748b;margin-top:3px}
+      .header-right{text-align:right;font-size:11px;color:#94a3b8;line-height:1.8}
+      .header-right strong{color:#64748b}
+
+      /* Section labels */
+      .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A3A8C;
+        margin:28px 0 12px;padding-bottom:6px;border-bottom:1.5px solid #e2e8f0}
+
+      /* Summary cards */
+      .card{border:1.5px solid #e2e8f0;border-radius:10px;padding:16px;break-inside:avoid;margin-bottom:12px}
+      .card-highlight{border-color:#1A3A8C;background:#f8faff}
+      .card h3{font-size:14px;font-weight:700;margin-bottom:10px}
+      .trio{display:flex;gap:10px;margin-bottom:12px}
+      .stat{flex:1;background:#f8fafc;border-radius:7px;padding:8px;text-align:center}
+      .card-highlight .stat{background:#eef2ff}
+      .num{font-size:22px;font-weight:800;color:#1A3A8C}
+      .lbl{font-size:10px;color:#64748b;margin-top:1px}
+      .ag{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}
+      .ag th{text-align:left;padding:5px 8px;background:#f1f5f9;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+      .ag td{padding:4px 8px;border-top:1px solid #f1f5f9}
+      .num-cell{font-weight:700;text-align:right}
+      .age{color:#94a3b8;font-size:11px}
+      .footer-row{display:flex;gap:16px;font-size:11px;color:#64748b;padding-top:8px;border-top:1px solid #f1f5f9}
+      .footer-row strong{color:#0f172a}
+      .card-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+      /* Detail section */
+      .detail-section{break-inside:avoid;margin-bottom:20px}
+      .svc-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+      .svc-name{font-size:13px;font-weight:700;color:#0f172a}
+      .svc-count{font-size:11px;color:#64748b}
+      .detail-table{width:100%;border-collapse:collapse;font-size:12px}
+      .detail-table th{text-align:left;padding:6px 8px;background:#f8fafc;font-weight:600;font-size:10px;
+        text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid #e2e8f0}
+      .detail-table td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+      .detail-table tr:last-child td{border-bottom:none}
+      .detail-table tr:hover{background:#f8fafc}
+      .here{display:inline-block;padding:1px 6px;border-radius:10px;background:#dcfce7;color:#16a34a;font-size:10px;font-weight:600}
+      .med{color:#d97706;font-size:11px}
+
+      @media print{body{padding:16px} .card-grid{grid-template-columns:1fr 1fr}}
     </style></head><body>
-      <h1>Attendance Report</h1>
-      <div class="sub">${date}</div>
-      <h2>Whole Day</h2>
-      ${card('All Services Combined', allDay)}
-      <h2>Per Service</h2>
-      <div class="grid">${svcCards}</div>
+
+      <!-- Header -->
+      <div class="header">
+        <div class="header-left">
+          <div class="org">${churchName}</div>
+          <div class="title">Kids Ministry Attendance</div>
+          <div class="date">${dateStr}</div>
+        </div>
+        <div class="header-right">
+          <div>Printed: <strong>${timeStr}</strong></div>
+          <div>Total Kids: <strong>${rawList.length}</strong></div>
+          <div>Services: <strong>${servicesInData.length}</strong></div>
+        </div>
+      </div>
+
+      <!-- Whole Day Summary -->
+      <div class="section-label">Whole Day Summary</div>
+      ${summaryCard('All Services Combined', allDay, true)}
+
+      <!-- Per Service Summary -->
+      ${servicesInData.length > 1 ? `<div class="section-label">Per Service Summary</div><div class="card-grid">${svcCards}</div>` : ''}
+
+      <!-- Detailed Attendance List -->
+      <div class="section-label">Attendance List</div>
+      ${detailSections}
+
       <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}<\/script>
     </body></html>`)
     win.document.close()
@@ -475,20 +565,21 @@ export default function DashboardPage() {
                   : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
               >Summary</button>
             </div>
-            {view === 'summary' ? (
-              <button
-                onClick={printReport}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)]
-                  text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50
-                  transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Print Report
-              </button>
-            ) : checkins.length > 0 && (
+            <button
+              onClick={printReport}
+              disabled={rawList.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)]
+                text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50
+                disabled:opacity-40 transition-colors"
+              title="Print attendance report with summary + full children list"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              <span className="hidden sm:inline">Print Report</span>
+            </button>
+            {view === 'table' && checkins.length > 0 && (
               <button
                 onClick={exportCSV}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)]
@@ -499,7 +590,7 @@ export default function DashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Export CSV
+                <span className="hidden sm:inline">Export CSV</span>
               </button>
             )}
           </div>
@@ -760,6 +851,7 @@ export default function DashboardPage() {
                           onDelete={() => setPendingDelete(c.id)}
                           onDeleteConfirm={() => deleteCheckin({ variables: { checkinId: c.id } })}
                           onCancel={() => { setPendingDelete(null); setPendingCheckout(null) }}
+                          onExpand={() => setExpandedId(isExpanded ? null : c.id)}
                           onReprint={() => printCheckinLabel(c, showCheckout)}
                           onEdit={() => { setEditCheckin({ id: c.id, guardianName: c.guardian_name ?? '', guardianPhone: c.guardian_phone ?? '', serviceId: c.service.id }); setExpandedId(c.id) }}
                         />
@@ -975,7 +1067,16 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
 }
 
 function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deleting, checkingOut,
-  onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel, onReprint, onEdit }) {
+  onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel, onReprint, onEdit, onExpand }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    function close(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
   if (isCheckingOut) return (
     <div className="flex items-center justify-end gap-1">
       <button onClick={onCheckoutConfirm} disabled={checkingOut}
@@ -1000,41 +1101,74 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
           text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
     </div>
   )
+
+  function act(fn) { fn(); setOpen(false) }
+
   return (
-    <div className="flex items-center justify-end gap-0.5 sm:opacity-0 sm:[tr:hover_&]:opacity-100 transition-opacity">
-      <button onClick={onEdit} title="Edit check-in"
-        className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]
-          hover:bg-[var(--muted)] transition-colors">
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    <div ref={ref} className="relative flex justify-end">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+          hover:bg-[var(--muted)] transition-colors"
+        title="Actions"
+      >
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
         </svg>
       </button>
-      <button onClick={onReprint} title="Reprint sticker"
-        className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]
-          hover:bg-[var(--muted)] transition-colors">
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-        </svg>
-      </button>
-      {showCheckout && isActive && (
-        <button onClick={onCheckout} title="Check out"
-          className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--primary)]
-            hover:bg-[var(--primary)]/10 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
-          </svg>
-        </button>
+
+      {open && (
+        <div className="absolute right-0 top-8 z-30 w-44 rounded-xl border border-[var(--border)]
+          bg-[var(--card)] shadow-lg overflow-hidden">
+          <button onClick={() => act(onExpand)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors text-left">
+            <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View Details
+          </button>
+          <button onClick={() => act(onEdit)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors text-left">
+            <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            Edit Check-In
+          </button>
+          <button onClick={() => act(onReprint)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors text-left">
+            <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Reprint Sticker
+          </button>
+          {showCheckout && isActive && (
+            <button onClick={() => act(onCheckout)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--primary)]
+                hover:bg-[var(--primary)]/5 transition-colors text-left">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+              </svg>
+              Check Out
+            </button>
+          )}
+          <div className="border-t border-[var(--border)] my-0.5" />
+          <button onClick={() => act(onDelete)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 dark:text-red-400
+              hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Remove Record
+          </button>
+        </div>
       )}
-      <button onClick={onDelete} title="Remove record"
-        className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500
-          hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-      </button>
     </div>
   )
 }
