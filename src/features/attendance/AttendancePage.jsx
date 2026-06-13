@@ -174,16 +174,16 @@ export default function AttendancePage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <select value={serviceId} onChange={e => setServiceId(e.target.value)} className={selectClass}>
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
+        <select value={serviceId} onChange={e => setServiceId(e.target.value)} className={selectClass + ' w-full sm:w-auto'}>
           <option value="">All services</option>
           {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <select value={classId} onChange={e => setClassId(e.target.value)} className={selectClass}>
+        <select value={classId} onChange={e => setClassId(e.target.value)} className={selectClass + ' w-full sm:w-auto'}>
           <option value="">All classes</option>
           {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <div className="relative flex-1 min-w-[180px]">
+        <div className="col-span-2 relative flex-1 min-w-0">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] pointer-events-none"
             fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -205,9 +205,9 @@ export default function AttendancePage() {
         </div>
         {(serviceId || classId) && (
           <button onClick={() => { setServiceId(''); setClassId('') }}
-            className="px-3 py-2 rounded-lg border border-[var(--border)] text-xs
+            className="col-span-2 sm:col-span-1 px-3 py-2 rounded-lg border border-[var(--border)] text-xs
               text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors">
-            Clear
+            Clear filters
           </button>
         )}
       </div>

@@ -136,69 +136,127 @@ export default function SchedulePage() {
         services.length === 0 || classes.length === 0 ? (
           <p className="text-sm text-[var(--muted-foreground)]">No services or classes configured.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-            <table className="w-full border-collapse bg-[var(--card)]">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-left p-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider min-w-[120px]">
-                    Service
-                  </th>
-                  {classes.map(cls => (
-                    <th key={cls.id} className="text-center p-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider border-l border-[var(--border)] min-w-[130px]">
-                      {cls.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((service, i) => (
-                  <tr key={service.id} className={i > 0 ? 'border-t border-[var(--border)]' : ''}>
-                    <td className="p-4 align-top">
-                      <div className="text-sm font-medium text-[var(--foreground)]">{service.name}</div>
-                      {service.start_time && (
-                        <div className="text-xs text-[var(--muted-foreground)] mt-0.5">{formatTime(service.start_time)}</div>
-                      )}
-                    </td>
+          <>
+            {/* Mobile: cards per service */}
+            <div className="md:hidden space-y-4">
+              {services.map(service => (
+                <div key={service.id} className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+                  <div className="px-4 py-3 bg-[var(--muted)]/40 border-b border-[var(--border)]">
+                    <p className="font-semibold text-sm text-[var(--foreground)]">{service.name}</p>
+                    {service.start_time && (
+                      <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{formatTime(service.start_time)}</p>
+                    )}
+                  </div>
+                  <div className="divide-y divide-[var(--border)]">
                     {classes.map(cls => {
                       const key = `${cls.id}_${service.id}`
                       const teachers = (scheduleMap[key] ?? []).sort((a, b) => b.is_lead - a.is_lead)
                       return (
-                        <td
+                        <button
                           key={cls.id}
-                          className="p-2 border-l border-[var(--border)] align-top cursor-pointer hover:bg-[var(--accent)] transition-colors"
+                          className="w-full flex items-center justify-between px-4 py-3 text-left
+                            hover:bg-[var(--accent)] active:bg-[var(--accent)] transition-colors"
                           onClick={() => setActiveCell({
                             classId: cls.id, serviceId: service.id,
                             className: cls.name,
                             serviceName: `${service.name}${service.start_time ? ` · ${formatTime(service.start_time)}` : ''}`,
                           })}
                         >
-                          {teachers.length === 0 ? (
-                            <div className="text-xs text-[var(--muted-foreground)] text-center py-3 opacity-40">+ Assign</div>
-                          ) : (
-                            <div className="space-y-1 p-1">
-                              {teachers.map(t => (
-                                <div
-                                  key={t.id}
-                                  className={`text-xs px-2 py-1 rounded-md flex items-center gap-1 ${
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-[var(--foreground)]">{cls.name}</p>
+                            {teachers.length === 0 ? (
+                              <p className="text-xs text-[var(--muted-foreground)] opacity-50 mt-0.5">No teacher assigned</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {teachers.map(t => (
+                                  <span key={t.id} className={`text-xs px-2 py-0.5 rounded-md ${
                                     t.is_lead
                                       ? 'bg-[var(--primary)] text-white font-medium'
                                       : 'bg-[var(--secondary)] text-[var(--secondary-foreground)]'
-                                  }`}
-                                >
-                                  {t.is_lead && <span className="flex-shrink-0">★</span>}
-                                  <span className="truncate">{t.user.name.split(' ')[0]}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </td>
+                                  }`}>
+                                    {t.is_lead && '★ '}{t.user.name.split(' ')[0]}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <svg className="w-4 h-4 text-[var(--muted-foreground)] flex-shrink-0 ml-3"
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
                       )
                     })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop: matrix table */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-[var(--border)]">
+              <table className="w-full border-collapse bg-[var(--card)]">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-left p-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider min-w-[120px]">
+                      Service
+                    </th>
+                    {classes.map(cls => (
+                      <th key={cls.id} className="text-center p-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider border-l border-[var(--border)] min-w-[130px]">
+                        {cls.name}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {services.map((service, i) => (
+                    <tr key={service.id} className={i > 0 ? 'border-t border-[var(--border)]' : ''}>
+                      <td className="p-4 align-top">
+                        <div className="text-sm font-medium text-[var(--foreground)]">{service.name}</div>
+                        {service.start_time && (
+                          <div className="text-xs text-[var(--muted-foreground)] mt-0.5">{formatTime(service.start_time)}</div>
+                        )}
+                      </td>
+                      {classes.map(cls => {
+                        const key = `${cls.id}_${service.id}`
+                        const teachers = (scheduleMap[key] ?? []).sort((a, b) => b.is_lead - a.is_lead)
+                        return (
+                          <td
+                            key={cls.id}
+                            className="p-2 border-l border-[var(--border)] align-top cursor-pointer hover:bg-[var(--accent)] transition-colors"
+                            onClick={() => setActiveCell({
+                              classId: cls.id, serviceId: service.id,
+                              className: cls.name,
+                              serviceName: `${service.name}${service.start_time ? ` · ${formatTime(service.start_time)}` : ''}`,
+                            })}
+                          >
+                            {teachers.length === 0 ? (
+                              <div className="text-xs text-[var(--muted-foreground)] text-center py-3 opacity-40">+ Assign</div>
+                            ) : (
+                              <div className="space-y-1 p-1">
+                                {teachers.map(t => (
+                                  <div
+                                    key={t.id}
+                                    className={`text-xs px-2 py-1 rounded-md flex items-center gap-1 ${
+                                      t.is_lead
+                                        ? 'bg-[var(--primary)] text-white font-medium'
+                                        : 'bg-[var(--secondary)] text-[var(--secondary-foreground)]'
+                                    }`}
+                                  >
+                                    {t.is_lead && <span className="flex-shrink-0">★</span>}
+                                    <span className="truncate">{t.user.name.split(' ')[0]}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )
       ) : (
         myGrouped.length === 0 ? (
