@@ -18,6 +18,7 @@ import AttendancePage from '@/features/attendance/AttendancePage'
 import SchedulePage from '@/features/schedule/SchedulePage'
 import TermsPage from '@/features/legal/TermsPage'
 import PrivacyPage from '@/features/legal/PrivacyPage'
+import NotFoundPage from '@/features/errors/NotFoundPage'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth()
@@ -45,7 +46,7 @@ export default function App() {
         <Routes>
           <Route path="/terms"   element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/login"   element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route
             path="/*"
             element={
@@ -65,6 +66,7 @@ export default function App() {
                     <Route path="/attendance" element={<AttendancePage />} />
                     <Route path="/schedule" element={<SchedulePage />} />
                     <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="*" element={<NotFoundPage />} />
                   </Routes>
                 </AppLayout>
               </PrivateRoute>
