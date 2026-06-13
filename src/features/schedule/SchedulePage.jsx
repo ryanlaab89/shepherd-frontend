@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation } from '@apollo/client'
 import { useAuth } from '@/features/auth/AuthContext'
-import {
+import { ME_QUERY,
   SCHEDULES_QUERY, MY_SCHEDULE_QUERY,
   SERVICES_QUERY, CLASSES_QUERY, USERS_QUERY,
   ASSIGN_TEACHER_MUTATION, REMOVE_TEACHER_MUTATION, SET_LEAD_MUTATION,
@@ -47,6 +47,7 @@ export default function SchedulePage() {
   const { data: classesData }  = useQuery(CLASSES_QUERY,  { skip: !isAdmin })
   const { data: usersData }    = useQuery(USERS_QUERY,    { skip: !isAdmin })
   const { data: myScheduleData } = useQuery(MY_SCHEDULE_QUERY, { skip: isAdmin, fetchPolicy: 'cache-and-network' })
+  const { data: meData }         = useQuery(ME_QUERY)
 
   const [assignTeacher, { loading: assigning }] = useMutation(ASSIGN_TEACHER_MUTATION)
   const [removeTeacher, { loading: removing }]  = useMutation(REMOVE_TEACHER_MUTATION)
@@ -110,6 +111,137 @@ export default function SchedulePage() {
   }
 
   const mutating = assigning || removing || settingLead
+  const churchName = meData?.me?.church?.name ?? 'Kids Ministry'
+
+  function exportScheduleCSV() {
+    if (!schedules.length) return
+    const headers = ['Date', 'Service', 'Time', 'Class', 'Teacher', 'Role']
+    const rows = [...schedules]
+      .sort((a, b) => a.service.name.localeCompare(b.service.name) || a.classGroup.name.localeCompare(b.classGroup.name))
+      .map(s => [
+        s.date,
+        s.service.name,
+        s.service.start_time ? formatTime(s.service.start_time) : '',
+        s.classGroup.name,
+        s.user.name,
+        s.is_lead ? 'Lead' : 'Volunteer',
+      ])
+    const csv = [headers, ...rows]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `schedule-${date}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function printSchedule() {
+    if (!schedules.length) return
+    const dateStr = formatDate(date)
+
+    // Build maps
+    const svcMap = {}   // serviceId -> classId -> Schedule[]
+    const classMap = {} // classId   -> serviceId -> Schedule[]
+    for (const s of schedules) {
+      if (!svcMap[s.service.id]) svcMap[s.service.id] = {}
+      if (!svcMap[s.service.id][s.classGroup.id]) svcMap[s.service.id][s.classGroup.id] = []
+      svcMap[s.service.id][s.classGroup.id].push(s)
+      if (!classMap[s.classGroup.id]) classMap[s.classGroup.id] = {}
+      if (!classMap[s.classGroup.id][s.service.id]) classMap[s.classGroup.id][s.service.id] = []
+      classMap[s.classGroup.id][s.service.id].push(s)
+    }
+
+    function teacherTag(t) {
+      return `<span class="${t.is_lead ? 'lead' : 'vol'}">${t.is_lead ? '★ ' : ''}${t.user.name}</span>`
+    }
+
+    // Section 1: by service
+    const byServiceHtml = services.map(svc => {
+      const clsRows = classes.map(cls => {
+        const teachers = (svcMap[svc.id]?.[cls.id] ?? []).sort((a, b) => b.is_lead - a.is_lead)
+        const cell = teachers.length
+          ? teachers.map(teacherTag).join(', ')
+          : '<span class="empty">—</span>'
+        return `<tr><td>${cls.name}</td><td>${cell}</td></tr>`
+      }).join('')
+      return `
+        <div class="block">
+          <div class="block-header">
+            <span class="block-title">${svc.name}</span>
+            ${svc.start_time ? `<span class="block-sub">${formatTime(svc.start_time)}</span>` : ''}
+          </div>
+          <table><thead><tr><th>Class</th><th>Teacher(s)</th></tr></thead>
+          <tbody>${clsRows}</tbody></table>
+        </div>`
+    }).join('')
+
+    // Section 2: by class (staff grouped per class)
+    const byClassHtml = classes.map(cls => {
+      const svcRows = services.map(svc => {
+        const teachers = (classMap[cls.id]?.[svc.id] ?? []).sort((a, b) => b.is_lead - a.is_lead)
+        if (!teachers.length) return ''
+        return `<tr><td>${svc.name}${svc.start_time ? ` <span class="sub">${formatTime(svc.start_time)}</span>` : ''}</td><td>${teachers.map(teacherTag).join(', ')}</td></tr>`
+      }).filter(Boolean).join('')
+      if (!svcRows) return ''
+      return `
+        <div class="block">
+          <div class="block-header"><span class="block-title">${cls.name}</span></div>
+          <table><thead><tr><th>Service</th><th>Teacher(s)</th></tr></thead>
+          <tbody>${svcRows}</tbody></table>
+        </div>`
+    }).filter(Boolean).join('')
+
+    const win = window.open('', '_blank')
+    win.document.write(`<!DOCTYPE html><html><head><title>Schedule — ${dateStr}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+      .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}
+      .header-left .org{font-size:11px;font-weight:700;color:#1A3A8C;text-transform:uppercase;letter-spacing:.1em}
+      .header-left .title{font-size:22px;font-weight:800;color:#0f172a;margin-top:2px}
+      .header-left .date{font-size:13px;color:#64748b;margin-top:3px}
+      .header-right{text-align:right;font-size:11px;color:#94a3b8;line-height:1.8}
+      .header-right strong{color:#64748b}
+      .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A3A8C;
+        margin:28px 0 12px;padding-bottom:6px;border-bottom:1.5px solid #e2e8f0}
+      .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+      .block{border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;break-inside:avoid}
+      .block-header{display:flex;align-items:baseline;justify-content:space-between;padding:10px 14px;
+        background:#f8fafc;border-bottom:1px solid #e2e8f0}
+      .block-title{font-size:13px;font-weight:700;color:#0f172a}
+      .block-sub{font-size:11px;color:#64748b}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{text-align:left;padding:6px 14px;font-weight:600;font-size:10px;text-transform:uppercase;
+        letter-spacing:.05em;color:#64748b;background:#fafafa;border-bottom:1px solid #f1f5f9}
+      td{padding:6px 14px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+      tr:last-child td{border-bottom:none}
+      .lead{font-weight:700;color:#1A3A8C}
+      .vol{color:#334155}
+      .empty{color:#cbd5e1}
+      .sub{color:#94a3b8;font-size:10px}
+      @media print{body{padding:16px}.grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}}
+    </style></head><body>
+      <div class="header">
+        <div class="header-left">
+          <div class="org">${churchName}</div>
+          <div class="title">Kids Ministry Schedule</div>
+          <div class="date">${dateStr}</div>
+        </div>
+        <div class="header-right">
+          <div>Printed: <strong>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
+          <div>Volunteers: <strong>${schedules.length}</strong></div>
+          <div>Services: <strong>${services.length}</strong></div>
+        </div>
+      </div>
+      <div class="section-label">By Service</div>
+      <div class="grid">${byServiceHtml}</div>
+      ${byClassHtml ? `<div class="section-label">By Class</div><div class="grid">${byClassHtml}</div>` : ''}
+      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
+    </body></html>`)
+    win.document.close()
+  }
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto">
@@ -121,7 +253,7 @@ export default function SchedulePage() {
       </div>
 
       {isAdmin && (
-        <div className="mb-6">
+        <div className="mb-6 flex items-center gap-2 flex-wrap">
           <input
             type="date"
             value={date}
@@ -129,6 +261,32 @@ export default function SchedulePage() {
             className="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)]
               text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
+          <button
+            onClick={printSchedule}
+            disabled={!schedules.length}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+              text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:border-[var(--primary)]/50 disabled:opacity-40 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print Schedule
+          </button>
+          <button
+            onClick={exportScheduleCSV}
+            disabled={!schedules.length}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+              text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:border-[var(--primary)]/50 disabled:opacity-40 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export CSV
+          </button>
         </div>
       )}
 

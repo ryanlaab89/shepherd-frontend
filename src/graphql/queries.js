@@ -35,6 +35,7 @@ export const USERS_QUERY = gql`
       id
       name
       email
+      phone
       role
       is_active
       created_at
