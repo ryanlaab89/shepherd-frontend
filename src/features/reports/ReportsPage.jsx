@@ -225,10 +225,10 @@ export default function ReportsPage() {
         ))}
         <div className="flex items-center gap-2 ml-2">
           <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
-            className={inputClass + ' w-36'} />
+            className={inputClass + ' w-36 pr-8'} />
           <span className="text-[var(--muted-foreground)] text-sm">–</span>
           <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-            className={inputClass + ' w-36'} />
+            className={inputClass + ' w-36 pr-8'} />
         </div>
         {tab === 'overview' && report && (
           <div className="flex items-center gap-2 ml-auto">

@@ -258,7 +258,7 @@ export default function AttendancePage() {
             </button>
           )}
           <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)}
-            className={selectClass + ' cursor-pointer'} />
+            className={selectClass + ' cursor-pointer pr-8'} />
           <Tip text={visible.length === 0 ? 'No records to print' : null}>
             <button onClick={printAttendance} disabled={visible.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]

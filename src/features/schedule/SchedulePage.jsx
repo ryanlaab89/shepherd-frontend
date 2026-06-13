@@ -258,7 +258,7 @@ export default function SchedulePage() {
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)]
+            className="pl-3 pr-8 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)]
               text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
           <Tip text={!schedules.length ? 'No assignments for this date' : null}>
