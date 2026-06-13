@@ -10,6 +10,7 @@ import {
   USERS_QUERY,
   SCHEDULES_QUERY,
   ME_QUERY,
+  CLASSES_QUERY,
 } from '@/graphql/queries'
 import {
   SET_CLASS_SESSION_MUTATION,
@@ -53,7 +54,7 @@ export default function DashboardPage() {
   const [quickCode,       setQuickCode]       = useState('')
   const [quickLoading,    setQuickLoading]    = useState(false)
   const [view,            setView]            = useState('table') // 'table' | 'summary'
-  const [expandedId,      setExpandedId]      = useState(null)
+  const [detailCheckin,   setDetailCheckin]   = useState(null)
   const [editCheckin,     setEditCheckin]     = useState(null) // { id, guardianName, guardianPhone, serviceId }
   const [editSaving,      setEditSaving]      = useState(false)
   const prevServiceRef = useRef(null)
@@ -65,7 +66,20 @@ export default function DashboardPage() {
   const { data: servicesData } = useQuery(SERVICES_QUERY)
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY)
   const { data: schedulesData } = useQuery(SCHEDULES_QUERY, { variables: { date: today }, fetchPolicy: 'cache-and-network' })
-  const { data: meData } = useQuery(ME_QUERY)
+  const { data: meData }        = useQuery(ME_QUERY)
+  const { data: allClassesData } = useQuery(CLASSES_QUERY)
+
+  const classMetaMap = useMemo(() => {
+    const map = {}
+    for (const cls of (allClassesData?.classes ?? [])) {
+      let ageRange = null
+      if (cls.min_age !== null && cls.max_age !== null) ageRange = `${cls.min_age}–${cls.max_age} yrs`
+      else if (cls.min_age !== null) ageRange = `${cls.min_age}+ yrs`
+      else if (cls.max_age !== null) ageRange = `Up to ${cls.max_age} yrs`
+      map[cls.name] = { ageRange, description: cls.description ?? null }
+    }
+    return map
+  }, [allClassesData])
 
   const classes    = classData?.todayClassSessions ?? []
   const staffList  = usersData?.users ?? []
@@ -318,13 +332,15 @@ export default function DashboardPage() {
       }
     }
 
-    const CLASS_ORDER = ['Toddler', 'Pre School', 'Primary', 'Pre Teens']
-    const AGE_RANGES  = { Toddler: '0–3', 'Pre School': '4–6', Primary: '7–8', 'Pre Teens': '9–12' }
+    const CLASS_ORDER_PRINT = ['Toddler', 'Pre School', 'Primary', 'Pre Teens']
 
     function classRows(byClass) {
-      const order = [...CLASS_ORDER, ...Object.keys(byClass).filter(k => !CLASS_ORDER.includes(k))]
+      const order = [...CLASS_ORDER_PRINT, ...Object.keys(byClass).filter(k => !CLASS_ORDER_PRINT.includes(k))]
       return order.filter(k => byClass[k])
-        .map(k => `<tr><td>${k}${AGE_RANGES[k] ? ` <span class="age">(${AGE_RANGES[k]})</span>` : ''}</td><td class="num-cell">${byClass[k]}</td></tr>`)
+        .map(k => {
+          const range = classMetaMap[k]?.ageRange
+          return `<tr><td>${k}${range ? ` <span class="age">(${range})</span>` : ''}</td><td class="num-cell">${byClass[k]}</td></tr>`
+        })
         .join('')
     }
 
@@ -598,7 +614,7 @@ export default function DashboardPage() {
 
         {/* Summary view */}
         {view === 'summary' && (
-          <SummaryView rawList={rawList} schedules={schedules} />
+          <SummaryView rawList={rawList} schedules={schedules} classMetaMap={classMetaMap} />
         )}
 
         {/* Quick checkout by pickup code */}
@@ -763,18 +779,15 @@ export default function DashboardPage() {
                   const isSelecting   = selected.has(c.id)
                   const isDeleting    = pendingDelete   === c.id
                   const isCheckingOut = pendingCheckout === c.id
-                  const isExpanded    = expandedId === c.id
-                  const isEditing     = editCheckin?.id === c.id
                   const colSpan       = showCheckout ? 9 : 7
 
                   return (
                     <Fragment key={c.id}>
                     <tr
-                      onClick={e => { if (e.target.closest('button,input')) return; setExpandedId(isExpanded ? null : c.id) }}
+                      onClick={e => { if (e.target.closest('button,input')) return; setDetailCheckin(c) }}
                       className={`transition-colors cursor-pointer ${
                         isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
                         isCheckingOut ? 'bg-[var(--primary)]/5' :
-                        isExpanded    ? 'bg-[var(--primary)]/5' :
                         isSelecting   ? 'bg-[var(--primary)]/5' :
                         'bg-[var(--card)] hover:bg-[var(--muted)]/40'
                       }`}>
@@ -851,160 +864,13 @@ export default function DashboardPage() {
                           onDelete={() => setPendingDelete(c.id)}
                           onDeleteConfirm={() => deleteCheckin({ variables: { checkinId: c.id } })}
                           onCancel={() => { setPendingDelete(null); setPendingCheckout(null) }}
-                          onExpand={() => setExpandedId(isExpanded ? null : c.id)}
-                          onReprint={() => printCheckinLabel(c, showCheckout)}
-                          onEdit={() => { setEditCheckin({ id: c.id, guardianName: c.guardian_name ?? '', guardianPhone: c.guardian_phone ?? '', serviceId: c.service.id }); setExpandedId(c.id) }}
+                          onExpand={() => setDetailCheckin(c)}
+                          onReprint={() => printCheckinLabel(c, showCheckout, meData?.me?.church?.name ?? '')}
+                          onEdit={() => { setDetailCheckin(c); setEditCheckin({ id: c.id, guardianName: c.guardian_name ?? '', guardianPhone: c.guardian_phone ?? '', serviceId: c.service.id }) }}
                         />
                       </td>
                     </tr>
 
-                    {/* Expanded detail + edit row */}
-                    {isExpanded && (
-                      <tr className="bg-[var(--primary)]/5">
-                        <td colSpan={colSpan} className="px-4 pb-4 pt-2">
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                            {/* Child info */}
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Child Details</p>
-                              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                                <div>
-                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Age</p>
-                                  <p className="text-[var(--foreground)] font-medium">
-                                    {calcAge(c.person.date_of_birth) != null ? `${calcAge(c.person.date_of_birth)} yrs` : '—'}
-                                    {c.person.date_of_birth ? <span className="text-[var(--muted-foreground)] font-normal ml-1 text-xs">({fmtDate(c.person.date_of_birth)})</span> : ''}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Class</p>
-                                  <p className="text-[var(--foreground)] font-medium">{c.classGroup?.name ?? '—'}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Family</p>
-                                  <p className="text-[var(--foreground)] font-medium">{c.person.household?.last_name ?? '—'}</p>
-                                  {c.person.household?.phone && <p className="text-xs text-[var(--muted-foreground)]">{c.person.household.phone}</p>}
-                                </div>
-                                <div>
-                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Total Visits</p>
-                                  <p className="text-[var(--foreground)] font-medium">{c.person.checkins_count ?? 0}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Last Visit</p>
-                                  <p className="text-[var(--foreground)] font-medium">{fmtDate(c.person.last_checkin_at)}</p>
-                                </div>
-                              </div>
-                              {c.person.medical_notes && (
-                                <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
-                                  <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">Medical Notes</p>
-                                  <p className="text-xs text-amber-800 dark:text-amber-300">{c.person.medical_notes}</p>
-                                </div>
-                              )}
-                              <button
-                                onClick={() => printCheckinLabel(c, showCheckout)}
-                                className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg border border-[var(--border)]
-                                  bg-[var(--card)] text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                </svg>
-                                Reprint Sticker
-                              </button>
-                            </div>
-
-                            {/* Edit check-in */}
-                            <div>
-                              <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">
-                                {isEditing ? 'Edit Check-In' : 'Check-In Info'}
-                              </p>
-                              {isEditing ? (
-                                <form onSubmit={handleSaveEdit} className="space-y-2">
-                                  <div>
-                                    <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian Name</label>
-                                    <input
-                                      value={editCheckin.guardianName}
-                                      onChange={e => setEditCheckin(p => ({ ...p, guardianName: e.target.value }))}
-                                      placeholder="Guardian name"
-                                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
-                                        text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]
-                                        focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian Phone</label>
-                                    <input
-                                      value={editCheckin.guardianPhone}
-                                      onChange={e => setEditCheckin(p => ({ ...p, guardianPhone: e.target.value }))}
-                                      placeholder="Guardian phone"
-                                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
-                                        text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]
-                                        focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</label>
-                                    <select
-                                      value={editCheckin.serviceId}
-                                      onChange={e => setEditCheckin(p => ({ ...p, serviceId: e.target.value }))}
-                                      className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
-                                        text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors"
-                                    >
-                                      {allServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
-                                  </div>
-                                  <div className="flex gap-2 pt-1">
-                                    <button type="button" onClick={() => setEditCheckin(null)}
-                                      className="flex-1 py-2 rounded-lg border border-[var(--border)] text-xs
-                                        text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors">
-                                      Cancel
-                                    </button>
-                                    <button type="submit" disabled={editSaving}
-                                      className="flex-1 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
-                                        text-xs font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50 transition-colors">
-                                      {editSaving ? 'Saving…' : 'Save Changes'}
-                                    </button>
-                                  </div>
-                                </form>
-                              ) : (
-                                <div className="space-y-2 text-sm">
-                                  <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                                    <div>
-                                      <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian</p>
-                                      <p className="text-[var(--foreground)]">{c.guardian_name || '—'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Phone</p>
-                                      <p className="text-[var(--foreground)]">{c.guardian_phone || '—'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</p>
-                                      <p className="text-[var(--foreground)]">{c.service.name}</p>
-                                    </div>
-                                    {showCheckout && c.pickup_code && (
-                                      <div>
-                                        <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Code</p>
-                                        <p className="font-mono font-bold text-[var(--primary)] tracking-widest">{c.pickup_code}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => setEditCheckin({ id: c.id, guardianName: c.guardian_name ?? '', guardianPhone: c.guardian_phone ?? '', serviceId: c.service.id })}
-                                    className="flex items-center gap-2 mt-1 px-3 py-1.5 rounded-lg border border-[var(--border)]
-                                      bg-[var(--card)] text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                    </svg>
-                                    Edit Details
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                     </Fragment>
                   )
                 })}
@@ -1020,6 +886,23 @@ export default function DashboardPage() {
         )}
       </>}
       </div>
+
+      {detailCheckin && (
+        <DetailsModal
+          c={detailCheckin}
+          showCheckout={showCheckout}
+          editCheckin={editCheckin?.id === detailCheckin.id ? editCheckin : null}
+          editSaving={editSaving}
+          allServices={allServices}
+          churchName={meData?.me?.church?.name ?? ''}
+          onEdit={() => setEditCheckin({ id: detailCheckin.id, guardianName: detailCheckin.guardian_name ?? '', guardianPhone: detailCheckin.guardian_phone ?? '', serviceId: detailCheckin.service.id })}
+          onEditChange={patch => setEditCheckin(p => ({ ...p, ...patch }))}
+          onSaveEdit={handleSaveEdit}
+          onCancelEdit={() => setEditCheckin(null)}
+          onReprint={() => printCheckinLabel(detailCheckin, showCheckout, meData?.me?.church?.name ?? '')}
+          onClose={() => { setDetailCheckin(null); setEditCheckin(null) }}
+        />
+      )}
     </div>
   )
 }
@@ -1066,6 +949,197 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
   )
 }
 
+function DetailsModal({ c, showCheckout, editCheckin, editSaving, allServices, churchName,
+  onEdit, onEditChange, onSaveEdit, onCancelEdit, onReprint, onClose }) {
+  const isEditing = !!editCheckin
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const fieldCls = `mt-1 w-full px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
+    text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]
+    focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50 transition-colors`
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+      {/* Panel */}
+      <div className="relative z-10 w-full max-w-xl bg-[var(--card)] rounded-2xl shadow-2xl
+        border border-[var(--border)] overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
+          <div className="w-9 h-9 rounded-full bg-[var(--primary)]/15 flex items-center justify-center
+            text-sm font-bold text-[var(--primary)] flex-shrink-0">
+            {c.person.first_name[0]}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-[var(--foreground)] truncate">
+              {c.person.first_name} {c.person.last_name}
+            </p>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {c.service.name}{c.classGroup ? ` · ${c.classGroup.name}` : ''}
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+
+          {/* Child details */}
+          <div>
+            <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">
+              Child Details
+            </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Age</p>
+                <p className="text-[var(--foreground)] font-medium">
+                  {calcAge(c.person.date_of_birth) != null ? `${calcAge(c.person.date_of_birth)} yrs` : '—'}
+                  {c.person.date_of_birth && (
+                    <span className="text-[var(--muted-foreground)] font-normal ml-1 text-xs">
+                      ({fmtDate(c.person.date_of_birth)})
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Class</p>
+                <p className="text-[var(--foreground)] font-medium">{c.classGroup?.name ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Family</p>
+                <p className="text-[var(--foreground)] font-medium">{c.person.household?.last_name ?? '—'}</p>
+                {c.person.household?.phone && (
+                  <p className="text-xs text-[var(--muted-foreground)]">{c.person.household.phone}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Total Visits</p>
+                <p className="text-[var(--foreground)] font-medium">{c.person.checkins_count ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Last Visit</p>
+                <p className="text-[var(--foreground)] font-medium">{fmtDate(c.person.last_checkin_at)}</p>
+              </div>
+            </div>
+            {c.person.medical_notes && (
+              <div className="mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200
+                dark:bg-amber-900/20 dark:border-amber-700">
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">
+                  Medical Notes
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-300">{c.person.medical_notes}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Check-in info / edit */}
+          <div className="border-t border-[var(--border)] pt-4">
+            <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">
+              {isEditing ? 'Edit Check-In' : 'Check-In Info'}
+            </p>
+            {isEditing ? (
+              <form onSubmit={onSaveEdit} className="space-y-2.5">
+                <div>
+                  <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian Name</label>
+                  <input value={editCheckin.guardianName}
+                    onChange={e => onEditChange({ guardianName: e.target.value })}
+                    placeholder="Guardian name" className={fieldCls} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian Phone</label>
+                  <input value={editCheckin.guardianPhone}
+                    onChange={e => onEditChange({ guardianPhone: e.target.value })}
+                    placeholder="Guardian phone" className={fieldCls} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</label>
+                  <select value={editCheckin.serviceId}
+                    onChange={e => onEditChange({ serviceId: e.target.value })}
+                    className={fieldCls}>
+                    {allServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={onCancelEdit}
+                    className="flex-1 py-2 rounded-lg border border-[var(--border)] text-xs
+                      text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={editSaving}
+                    className="flex-1 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
+                      text-xs font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50 transition-colors">
+                    {editSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div>
+                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian</p>
+                  <p className="text-[var(--foreground)]">{c.guardian_name || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Phone</p>
+                  <p className="text-[var(--foreground)]">{c.guardian_phone || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</p>
+                  <p className="text-[var(--foreground)]">{c.service.name}</p>
+                </div>
+                {showCheckout && c.pickup_code && (
+                  <div>
+                    <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Code</p>
+                    <p className="font-mono font-bold text-[var(--primary)] tracking-widest">{c.pickup_code}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        {!isEditing && (
+          <div className="flex items-center gap-2 px-5 py-3 border-t border-[var(--border)] bg-[var(--muted)]/30">
+            <button onClick={onReprint}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)]
+                bg-[var(--card)] text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Reprint Sticker
+            </button>
+            <button onClick={onEdit}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)]
+                bg-[var(--card)] text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              Edit Check-In
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deleting, checkingOut,
   onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel, onReprint, onEdit, onExpand }) {
   const [open, setOpen] = useState(false)
@@ -1086,7 +1160,12 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
   function handleOpen() {
     if (btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect()
-      setDropPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+      const menuHeight = 220 // approximate max height of dropdown
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceBelow >= menuHeight
+        ? rect.bottom + 4
+        : rect.top - menuHeight - 4
+      setDropPos({ top, right: window.innerWidth - rect.right })
     }
     setOpen(v => !v)
   }
@@ -1503,7 +1582,7 @@ function computeSummary(rows, schedules, serviceId = null) {
   }
 }
 
-function SummaryCard({ title, stats, highlight = false }) {
+function SummaryCard({ title, stats, highlight = false, classMetaMap = {} }) {
   const orderedClasses = [
     ...CLASS_ORDER.filter(k => stats.byClass[k]),
     ...Object.keys(stats.byClass).filter(k => !CLASS_ORDER.includes(k) && stats.byClass[k]),
@@ -1534,13 +1613,20 @@ function SummaryCard({ title, stats, highlight = false }) {
       {orderedClasses.length > 0 && (
         <div className="mb-3">
           <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">By Age Group</p>
-          <div className="space-y-1">
-            {orderedClasses.map(name => (
+          <div className="space-y-1.5">
+            {orderedClasses.map(name => {
+              const meta = classMetaMap[name]
+              return (
               <div key={name} className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm font-medium text-[var(--foreground)] truncate">{name}</span>
-                  {AGE_LABELS[name] && (
-                    <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0">{AGE_LABELS[name]}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-[var(--foreground)] truncate">{name}</span>
+                    {meta?.ageRange && (
+                      <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0">{meta.ageRange}</span>
+                    )}
+                  </div>
+                  {meta?.description && (
+                    <p className="text-[10px] text-[var(--muted-foreground)] truncate leading-tight">{meta.description}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1552,7 +1638,7 @@ function SummaryCard({ title, stats, highlight = false }) {
                   <span className="text-sm font-bold text-[var(--foreground)] w-5 text-right">{stats.byClass[name]}</span>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )}
@@ -1566,7 +1652,7 @@ function SummaryCard({ title, stats, highlight = false }) {
   )
 }
 
-function SummaryView({ rawList, schedules }) {
+function SummaryView({ rawList, schedules, classMetaMap = {} }) {
   if (rawList.length === 0) return (
     <div className="flex flex-col items-center justify-center h-32 text-[var(--muted-foreground)]
       border border-dashed border-[var(--border)] rounded-xl text-sm">
@@ -1581,7 +1667,7 @@ function SummaryView({ rawList, schedules }) {
   return (
     <div className="space-y-4">
       {/* Whole Day */}
-      <SummaryCard title="Whole Day — All Services" stats={dayStats} highlight />
+      <SummaryCard title="Whole Day — All Services" stats={dayStats} highlight classMetaMap={classMetaMap} />
 
       {/* Per Service */}
       {servicesInData.length > 1 && (
@@ -1593,6 +1679,7 @@ function SummaryView({ rawList, schedules }) {
                 key={svc.id}
                 title={svc.name}
                 stats={computeSummary(rawList, schedules, svc.id)}
+                classMetaMap={classMetaMap}
               />
             ))}
           </div>

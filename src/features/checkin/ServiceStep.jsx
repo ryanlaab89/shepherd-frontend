@@ -59,6 +59,16 @@ export default function ServiceStep({ person, household, initialGuardianName = '
     setAutoResult(detectActiveService(services))
   }, [services])
 
+  // Auto-assign the best age-matching class when classes load
+  useEffect(() => {
+    if (!classes.length || childAge === null) return
+    const match = classes.find(c => !ageError(c, childAge))
+    if (match) {
+      setSelectedClass(match.id)
+      setClassError('')
+    }
+  }, [classes]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleClassSelect(cls) {
     const err = ageError(cls, childAge)
     if (err) {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@apollo/client'
-import { CHURCH_SETTINGS_QUERY } from '@/graphql/queries'
+import { CHURCH_SETTINGS_QUERY, ME_QUERY } from '@/graphql/queries'
 import SearchStep from './SearchStep'
 import ServiceStep from './ServiceStep'
 import ConfirmationStep from './ConfirmationStep'
@@ -15,7 +15,9 @@ export default function CheckInPage() {
   const [siblingQuery,  setSiblingQuery]  = useState('')
 
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY, { fetchPolicy: 'cache-first' })
+  const { data: meData }       = useQuery(ME_QUERY, { fetchPolicy: 'cache-first' })
   const showCheckout = settingsData?.churchSettings?.show_checkout ?? true
+  const churchName   = meData?.me?.church?.name ?? ''
 
   function reset() {
     setStep('search')
@@ -86,6 +88,7 @@ export default function CheckInPage() {
             onAnother={reset}
             household={household}
             onSiblingCheckIn={onSiblingCheckIn}
+            churchName={churchName}
           />
         )}
       </div>

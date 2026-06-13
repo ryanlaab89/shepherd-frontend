@@ -1,8 +1,8 @@
 import { printCheckinLabel } from '@/lib/printLabel'
 
-export default function ConfirmationStep({ checkin, showCheckout = true, onAnother, household, onSiblingCheckIn }) {
+export default function ConfirmationStep({ checkin, showCheckout = true, onAnother, household, onSiblingCheckIn, churchName = '' }) {
   function printLabel() {
-    printCheckinLabel(checkin, showCheckout)
+    printCheckinLabel(checkin, showCheckout, churchName || 'Kids Ministry')
   }
 
   return (

@@ -1,6 +1,6 @@
 import QRCode from 'qrcode'
 
-export async function printCheckinLabel(checkin, showCheckout = true) {
+export async function printCheckinLabel(checkin, showCheckout = true, churchName = 'Kids Ministry') {
   const guardianLine = checkin.guardian_name
     ? `<div class="guardian">Guardian: ${checkin.guardian_name}</div>`
     : ''
@@ -51,7 +51,7 @@ export async function printCheckinLabel(checkin, showCheckout = true) {
       <div class="label">
         <div class="header">
           <div class="dot"></div>
-          <span class="app-name">Shepherd Check-In</span>
+          <span class="app-name">${churchName}</span>
         </div>
         <div style="min-width:0">
           <div class="child-name">${checkin.person.first_name} ${checkin.person.last_name}</div>
