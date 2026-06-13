@@ -8,14 +8,18 @@ function fmtTime(dt) {
   if (!dt) return null
   return new Date(dt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
+function fmtDate(dt) {
+  if (!dt) return '—'
+  return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 function calcAge(dob) {
   if (!dob) return null
   const birth = new Date(dob)
   const now   = new Date()
-  let age = now.getFullYear() - birth.getFullYear()
+  let a = now.getFullYear() - birth.getFullYear()
   const m = now.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
-  return age
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) a--
+  return a
 }
 
 const selectClass = `px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
@@ -35,6 +39,7 @@ export default function AttendancePage() {
   const [pendingCheckout, setPendingCheckout] = useState(null)
   const [selected,        setSelected]        = useState(new Set())
   const [batchLoading,    setBatchLoading]    = useState(false)
+  const [detailLog,       setDetailLog]       = useState(null)
 
   const { data, loading, refetch } = useQuery(ATTENDANCE_LOGS_QUERY, {
     variables: { date, serviceId: serviceId || undefined, classId: classId || undefined },
@@ -50,49 +55,38 @@ export default function AttendancePage() {
 
   const showCheckout = (stgData?.churchSettings?.show_checkout ?? true) ||
                        (stgData?.churchSettings?.require_checkout ?? false)
-  const services  = svcData?.services ?? []
-  const classes   = clsData?.classes  ?? []
-  const logs      = data?.attendanceLogs ?? []
+  const services = svcData?.services ?? []
+  const classes  = clsData?.classes  ?? []
+  const logs     = data?.attendanceLogs ?? []
 
   const total      = logs.length
   const active     = logs.filter(l => !l.checked_out_at).length
   const checkedOut = total - active
 
-  // Filter + sort
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
     const list = q
       ? logs.filter(l =>
           `${l.person.first_name} ${l.person.last_name}`.toLowerCase().includes(q) ||
-          (l.guardian_name  ?? '').toLowerCase().includes(q) ||
-          (l.pickup_code    ?? '').toLowerCase().includes(q)
+          (l.guardian_name ?? '').toLowerCase().includes(q) ||
+          (l.pickup_code   ?? '').toLowerCase().includes(q)
         )
       : [...logs]
 
     list.sort((a, b) => {
       let cmp = 0
       switch (sortField) {
-        case 'name':
-          cmp = `${a.person.first_name} ${a.person.last_name}`
-            .localeCompare(`${b.person.first_name} ${b.person.last_name}`)
-          break
-        case 'class':
-          cmp = (a.classGroup?.name ?? '').localeCompare(b.classGroup?.name ?? '')
-          break
-        case 'service':
-          cmp = (a.service?.name ?? '').localeCompare(b.service?.name ?? '')
-          break
-        case 'guardian':
-          cmp = (a.guardian_name ?? '').localeCompare(b.guardian_name ?? '')
-          break
+        case 'name':     cmp = `${a.person.first_name} ${a.person.last_name}`.localeCompare(`${b.person.first_name} ${b.person.last_name}`); break
+        case 'class':    cmp = (a.classGroup?.name ?? '').localeCompare(b.classGroup?.name ?? ''); break
+        case 'service':  cmp = (a.service?.name ?? '').localeCompare(b.service?.name ?? ''); break
+        case 'guardian': cmp = (a.guardian_name ?? '').localeCompare(b.guardian_name ?? ''); break
         case 'checkout':
           if (!a.checked_out_at && !b.checked_out_at) cmp = 0
           else if (!a.checked_out_at) cmp = 1
           else if (!b.checked_out_at) cmp = -1
           else cmp = new Date(a.checked_out_at) - new Date(b.checked_out_at)
           break
-        default:
-          cmp = new Date(a.checked_in_at) - new Date(b.checked_in_at)
+        default: cmp = new Date(a.checked_in_at) - new Date(b.checked_in_at)
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -104,7 +98,6 @@ export default function AttendancePage() {
     else { setSortField(field); setSortDir(field === 'time' || field === 'checkout' ? 'desc' : 'asc') }
   }
 
-  // Multi-select
   const visibleIds   = visible.map(l => l.id)
   const allSelected  = visibleIds.length > 0 && visibleIds.every(id => selected.has(id))
   const someSelected = visibleIds.some(id => selected.has(id)) && !allSelected
@@ -122,25 +115,17 @@ export default function AttendancePage() {
   }
 
   const selectedList   = [...selected]
-  const selectedActive = selectedList.filter(id => {
-    const row = logs.find(l => l.id === id)
-    return row && !row.checked_out_at
-  })
+  const selectedActive = selectedList.filter(id => logs.find(l => l.id === id) && !logs.find(l => l.id === id)?.checked_out_at)
 
   async function handleBatchCheckout() {
     setBatchLoading(true)
     await Promise.allSettled(selectedActive.map(id => checkOut({ variables: { checkinId: id } })))
-    await refetch()
-    setSelected(new Set())
-    setBatchLoading(false)
+    await refetch(); setSelected(new Set()); setBatchLoading(false)
   }
-
   async function handleBatchDelete() {
     setBatchLoading(true)
     await Promise.allSettled(selectedList.map(id => deleteLog({ variables: { checkinId: id } })))
-    await refetch()
-    setSelected(new Set())
-    setBatchLoading(false)
+    await refetch(); setSelected(new Set()); setBatchLoading(false)
   }
 
   const isToday = date === today
@@ -275,29 +260,31 @@ export default function AttendancePage() {
                   {showCheckout && (
                     <SortTh label="Out" field="checkout" {...{ sortField, sortDir, toggleSort }} />
                   )}
-                  <th className="w-20 px-2" />
+                  <th className="w-12 px-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {visible.map(log => {
-                  const age           = calcAge(log.person.date_of_birth)
+                  const logAge        = calcAge(log.person.date_of_birth)
                   const isActive      = !log.checked_out_at
                   const isSelecting   = selected.has(log.id)
                   const isDeleting    = pendingDelete   === log.id
                   const isCheckingOut = pendingCheckout === log.id
 
                   return (
-                    <tr key={log.id} className={`transition-colors ${
-                      isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
-                      isCheckingOut ? 'bg-[var(--primary)]/5' :
-                      isSelecting   ? 'bg-[var(--primary)]/5' :
-                      'bg-[var(--card)] hover:bg-[var(--muted)]/30'
-                    }`}>
-                      <td className="px-3 py-3 text-center">
+                    <tr key={log.id}
+                      onClick={e => { if (e.target.closest('button,input')) return; setDetailLog(log) }}
+                      className={`transition-colors cursor-pointer ${
+                        isDeleting    ? 'bg-red-50 dark:bg-red-900/10' :
+                        isCheckingOut ? 'bg-[var(--primary)]/5' :
+                        isSelecting   ? 'bg-[var(--primary)]/5' :
+                        'bg-[var(--card)] hover:bg-[var(--muted)]/30'
+                      }`}>
+                      <td className="px-3 py-4 text-center">
                         <input type="checkbox" checked={isSelecting} onChange={() => toggleRow(log.id)}
                           className="rounded border-[var(--border)] accent-[var(--primary)] cursor-pointer" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-full bg-[var(--primary)]/15 flex items-center
                             justify-center text-xs font-bold text-[var(--primary)] flex-shrink-0">
@@ -318,38 +305,38 @@ export default function AttendancePage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
-                        {age !== null ? `${age} yrs` : '—'}
+                      <td className="px-4 py-4 text-[var(--muted-foreground)] text-sm">
+                        {logAge !== null ? `${logAge} yrs` : '—'}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {log.classGroup
                           ? <span className="text-xs font-medium px-2 py-0.5 rounded-full
                               bg-[var(--primary)]/10 text-[var(--primary)]">{log.classGroup.name}</span>
                           : <span className="text-xs text-[var(--muted-foreground)]">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
+                      <td className="px-4 py-4 text-[var(--muted-foreground)] text-sm">
                         {log.service?.name ?? '—'}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {log.guardian_name || log.guardian_phone ? (
                           <div>
-                            {log.guardian_name && <p className="text-sm text-[var(--foreground)]">{log.guardian_name}</p>}
+                            {log.guardian_name  && <p className="text-sm text-[var(--foreground)]">{log.guardian_name}</p>}
                             {log.guardian_phone && <p className="text-xs text-[var(--muted-foreground)]">{log.guardian_phone}</p>}
                           </div>
                         ) : <span className="text-xs text-[var(--muted-foreground)]">—</span>}
                       </td>
                       {showCheckout && (
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-4">
                           <span className="font-mono font-bold text-[var(--primary)] tracking-widest text-sm">
                             {log.pickup_code}
                           </span>
                         </td>
                       )}
-                      <td className="px-4 py-3 text-sm text-[var(--foreground)]">
+                      <td className="px-4 py-4 text-sm text-[var(--foreground)]">
                         {fmtTime(log.checked_in_at)}
                       </td>
                       {showCheckout && (
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-4 py-4 text-sm">
                           {log.checked_out_at
                             ? <span className="text-[var(--muted-foreground)]">{fmtTime(log.checked_out_at)}</span>
                             : <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5
@@ -360,7 +347,7 @@ export default function AttendancePage() {
                               </span>}
                         </td>
                       )}
-                      <td className="px-2 py-3">
+                      <td className="px-2 py-4">
                         <RowActions
                           isActive={isActive}
                           showCheckout={showCheckout}
@@ -368,6 +355,7 @@ export default function AttendancePage() {
                           isCheckingOut={isCheckingOut}
                           deletingLog={deletingLog}
                           checkingOut={checkingOut}
+                          onView={() => setDetailLog(log)}
                           onCheckout={() => setPendingCheckout(log.id)}
                           onCheckoutConfirm={() => checkOut({ variables: { checkinId: log.id } })}
                           onDelete={() => setPendingDelete(log.id)}
@@ -388,6 +376,160 @@ export default function AttendancePage() {
           </div>
         </div>
       )}
+
+      {/* Details modal */}
+      {detailLog && (
+        <LogDetailsModal
+          log={detailLog}
+          showCheckout={showCheckout}
+          checkingOut={checkingOut}
+          onCheckout={() => { checkOut({ variables: { checkinId: detailLog.id } }); setDetailLog(null) }}
+          onClose={() => setDetailLog(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Log Details Modal ─────────────────────────────────────────────────────────
+
+function LogDetailsModal({ log, showCheckout, checkingOut, onCheckout, onClose }) {
+  const isActive = !log.checked_out_at
+  const logAge   = calcAge(log.person.date_of_birth)
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+      <div className="relative z-10 w-full max-w-md bg-[var(--card)] rounded-2xl shadow-2xl
+        border border-[var(--border)] overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
+          <div className="w-9 h-9 rounded-full bg-[var(--primary)]/15 flex items-center justify-center
+            text-sm font-bold text-[var(--primary)] flex-shrink-0">
+            {log.person.first_name[0]}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-[var(--foreground)] truncate">
+              {log.person.first_name} {log.person.last_name}
+            </p>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {log.service?.name}{log.classGroup ? ` · ${log.classGroup.name}` : ''}
+            </p>
+          </div>
+          {showCheckout && isActive && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5
+              rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Here
+            </span>
+          )}
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+
+          {/* Child info */}
+          <div>
+            <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Child</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Age</p>
+                <p className="text-[var(--foreground)] font-medium">
+                  {logAge != null ? `${logAge} yrs` : '—'}
+                  {log.person.date_of_birth && (
+                    <span className="text-[var(--muted-foreground)] font-normal ml-1 text-xs">
+                      ({fmtDate(log.person.date_of_birth)})
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Class</p>
+                <p className="text-[var(--foreground)] font-medium">{log.classGroup?.name ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Family</p>
+                <p className="text-[var(--foreground)] font-medium">{log.person.household?.last_name ?? '—'}</p>
+                {log.person.household?.phone && (
+                  <p className="text-xs text-[var(--muted-foreground)]">{log.person.household.phone}</p>
+                )}
+              </div>
+            </div>
+            {log.person.medical_notes && (
+              <div className="mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200
+                dark:bg-amber-900/20 dark:border-amber-700">
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">Medical Notes</p>
+                <p className="text-xs text-amber-800 dark:text-amber-300">{log.person.medical_notes}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Check-in info */}
+          <div className="border-t border-[var(--border)] pt-4">
+            <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Check-In</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Guardian</p>
+                <p className="text-[var(--foreground)]">{log.guardian_name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Phone</p>
+                <p className="text-[var(--foreground)]">{log.guardian_phone || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Service</p>
+                <p className="text-[var(--foreground)]">{log.service?.name ?? '—'}</p>
+              </div>
+              {showCheckout && log.pickup_code && (
+                <div>
+                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Code</p>
+                  <p className="font-mono font-bold text-[var(--primary)] tracking-widest">{log.pickup_code}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Checked In</p>
+                <p className="text-[var(--foreground)]">{fmtTime(log.checked_in_at)}</p>
+              </div>
+              {showCheckout && (
+                <div>
+                  <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider">Checked Out</p>
+                  <p className="text-[var(--foreground)]">{fmtTime(log.checked_out_at) ?? '—'}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        {showCheckout && isActive && (
+          <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--muted)]/30">
+            <button onClick={onCheckout} disabled={checkingOut}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--primary)]
+                text-[var(--primary-foreground)] text-sm font-semibold
+                hover:bg-[var(--primary)]/90 disabled:opacity-50 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+              </svg>
+              {checkingOut ? 'Checking out…' : 'Check Out'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -404,11 +546,8 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)]
             text-[var(--primary-foreground)] text-xs font-semibold
             hover:bg-[var(--primary)]/90 disabled:opacity-50 transition-colors">
-          {loading
-            ? <Spinner sm />
-            : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7" />
-              </svg>}
+          {loading ? <Spinner sm /> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg>}
           Check Out {activeCount > 1 ? `(${activeCount})` : ''}
         </button>
       )}
@@ -416,12 +555,9 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300
           text-red-600 dark:border-red-700 dark:text-red-400 text-xs font-semibold
           hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors">
-        {loading
-          ? <Spinner sm />
-          : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>}
+        {loading ? <Spinner sm /> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>}
         Delete ({count})
       </button>
       <button onClick={onClear}
@@ -433,12 +569,28 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
 }
 
 function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletingLog, checkingOut,
-  onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel }) {
+  onView, onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel }) {
+  const [open,    setOpen]    = useState(false)
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
+  const btnRef  = useRef(null)
+  const dropRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function close(e) {
+      if (btnRef.current?.contains(e.target)) return
+      if (dropRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
   if (isCheckingOut) return (
     <div className="flex items-center gap-1">
       <button onClick={onCheckoutConfirm} disabled={checkingOut}
         className="px-2 py-1 rounded bg-[var(--primary)] text-[var(--primary-foreground)]
-          text-[10px] font-medium hover:bg-[var(--primary)]/90 disabled:opacity-50 whitespace-nowrap">
+          text-[10px] font-semibold hover:bg-[var(--primary)]/90 disabled:opacity-50 whitespace-nowrap">
         {checkingOut ? '…' : 'Confirm'}
       </button>
       <button onClick={onCancel}
@@ -449,7 +601,7 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
   if (isDeleting) return (
     <div className="flex items-center gap-1">
       <button onClick={onDeleteConfirm} disabled={deletingLog}
-        className="px-2 py-1 rounded bg-red-600 text-white text-[10px] font-medium
+        className="px-2 py-1 rounded bg-red-600 text-white text-[10px] font-semibold
           hover:bg-red-700 disabled:opacity-50 whitespace-nowrap">
         {deletingLog ? '…' : 'Remove'}
       </button>
@@ -458,25 +610,67 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
           text-[var(--muted-foreground)] hover:bg-[var(--muted)]">✕</button>
     </div>
   )
+
+  function handleOpen() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      const menuHeight = showCheckout && isActive ? 160 : 130
+      const top = window.innerHeight - rect.bottom >= menuHeight
+        ? rect.bottom + 4
+        : rect.top - menuHeight - 4
+      setDropPos({ top, right: window.innerWidth - rect.right })
+    }
+    setOpen(v => !v)
+  }
+
+  function act(fn) { setOpen(false); fn() }
+
   return (
-    <div className="flex items-center gap-0.5 opacity-0 [tr:hover_&]:opacity-100 transition-opacity">
-      {showCheckout && isActive && (
-        <button onClick={onCheckout} title="Check out"
-          className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--primary)]
-            hover:bg-[var(--primary)]/10 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
-          </svg>
-        </button>
-      )}
-      <button onClick={onDelete} title="Remove record"
-        className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500
-          hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    <div className="flex justify-end">
+      <button ref={btnRef} onClick={handleOpen}
+        className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+          hover:bg-[var(--muted)] transition-colors">
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
         </svg>
       </button>
+
+      {open && (
+        <div ref={dropRef}
+          style={{ position: 'fixed', top: dropPos.top, right: dropPos.right }}
+          className="z-50 w-44 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg overflow-hidden">
+          <button onClick={() => act(onView)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--foreground)]
+              hover:bg-[var(--muted)] transition-colors text-left">
+            <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View Details
+          </button>
+          {showCheckout && isActive && (
+            <button onClick={() => act(onCheckout)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--primary)]
+                hover:bg-[var(--primary)]/5 transition-colors text-left">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+              </svg>
+              Check Out
+            </button>
+          )}
+          <div className="border-t border-[var(--border)] my-0.5" />
+          <button onClick={() => act(onDelete)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 dark:text-red-400
+              hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete Record
+          </button>
+        </div>
+      )}
     </div>
   )
 }
