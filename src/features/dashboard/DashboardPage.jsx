@@ -778,14 +778,14 @@ export default function DashboardPage() {
                         isSelecting   ? 'bg-[var(--primary)]/5' :
                         'bg-[var(--card)] hover:bg-[var(--muted)]/40'
                       }`}>
-                      <td className="px-3 py-3 text-center">
+                      <td className="px-3 py-4 text-center">
                         <input type="checkbox" checked={isSelecting} onChange={() => toggleRow(c.id)}
                           className="rounded border-[var(--border)] accent-[var(--primary)] cursor-pointer" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[var(--primary)]/15 flex items-center justify-center
-                            text-xs font-bold text-[var(--primary)] flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-[var(--primary)]/15 flex items-center justify-center
+                            text-sm font-bold text-[var(--primary)] flex-shrink-0">
                             {c.person.first_name[0]}
                           </div>
                           <span className="font-medium text-[var(--foreground)]">
@@ -803,13 +803,13 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {c.classGroup
                           ? <span className="text-xs font-medium px-2 py-0.5 rounded-full
                               bg-[var(--primary)]/10 text-[var(--primary)]">{c.classGroup.name}</span>
                           : <span className="text-xs text-[var(--muted-foreground)]">—</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {c.guardian_name || c.guardian_phone
                           ? <div>
                               {c.guardian_name && <p className="text-sm text-[var(--foreground)]">{c.guardian_name}</p>}
@@ -817,17 +817,17 @@ export default function DashboardPage() {
                             </div>
                           : <span className="text-xs text-[var(--muted-foreground)]">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">{c.service.name}</td>
+                      <td className="px-4 py-4 text-[var(--muted-foreground)] text-sm">{c.service.name}</td>
                       {showCheckout && (
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-4">
                           <span className="font-mono font-bold text-[var(--primary)] tracking-widest text-sm">
                             {c.pickup_code}
                           </span>
                         </td>
                       )}
-                      <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">{fmtTime(c.checked_in_at)}</td>
+                      <td className="px-4 py-4 text-[var(--muted-foreground)] text-sm">{fmtTime(c.checked_in_at)}</td>
                       {showCheckout && (
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-4 py-4 text-sm">
                           {c.checked_out_at
                             ? <span className="text-[var(--muted-foreground)]">{fmtTime(c.checked_out_at)}</span>
                             : <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5
@@ -838,7 +838,7 @@ export default function DashboardPage() {
                               </span>}
                         </td>
                       )}
-                      <td className="px-2 py-3 text-right">
+                      <td className="px-2 py-4 text-right">
                         <RowActions
                           isActive={isActive}
                           showCheckout={showCheckout}
@@ -1069,13 +1069,27 @@ function BatchBar({ count, activeCount, showCheckout, loading, onCheckout, onDel
 function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deleting, checkingOut,
   onCheckout, onCheckoutConfirm, onDelete, onDeleteConfirm, onCancel, onReprint, onEdit, onExpand }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef(null)
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
+  const btnRef = useRef(null)
+  const dropRef = useRef(null)
   useEffect(() => {
     if (!open) return
-    function close(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    function close(e) {
+      if (btnRef.current && btnRef.current.contains(e.target)) return
+      if (dropRef.current && dropRef.current.contains(e.target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [open])
+
+  function handleOpen() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setDropPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setOpen(v => !v)
+  }
 
   if (isCheckingOut) return (
     <div className="flex items-center justify-end gap-1">
@@ -1105,9 +1119,10 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
   function act(fn) { fn(); setOpen(false) }
 
   return (
-    <div ref={ref} className="relative flex justify-end">
+    <div className="flex justify-end">
       <button
-        onClick={() => setOpen(v => !v)}
+        ref={btnRef}
+        onClick={handleOpen}
         className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)]
           hover:bg-[var(--muted)] transition-colors"
         title="Actions"
@@ -1118,7 +1133,9 @@ function RowActions({ isActive, showCheckout, isDeleting, isCheckingOut, deletin
       </button>
 
       {open && (
-        <div className="absolute right-0 top-8 z-30 w-44 rounded-xl border border-[var(--border)]
+        <div ref={dropRef}
+          style={{ position: 'fixed', top: dropPos.top, right: dropPos.right }}
+          className="z-50 w-44 rounded-xl border border-[var(--border)]
           bg-[var(--card)] shadow-lg overflow-hidden">
           <button onClick={() => act(onExpand)}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--foreground)]
