@@ -207,8 +207,16 @@ export default function AttendancePage() {
       tr:last-child td{border-bottom:none}
       .here{display:inline-block;padding:1px 6px;border-radius:10px;background:#dcfce7;color:#16a34a;font-size:10px;font-weight:600}
       .med{color:#d97706;font-size:11px}
-      @media print{body{padding:16px}}
+      .pbar{display:flex;gap:8px;margin-bottom:20px}
+      .pbtn{padding:8px 18px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600}
+      .pbtn-p{background:#1A3A8C;color:#fff;border:none}
+      .pbtn-c{background:#fff;border:1.5px solid #e2e8f0;color:#334155}
+      @media print{body{padding:16px}.pbar{display:none!important}}
     </style></head><body>
+      <div class="pbar">
+        <button class="pbtn pbtn-p" onclick="window.print();window.onafterprint=function(){window.close()}">Print</button>
+        <button class="pbtn pbtn-c" onclick="window.close()">✕ Close</button>
+      </div>
       <div class="header">
         <div class="header-left">
           <div class="org">${churchName}</div>
@@ -231,7 +239,6 @@ export default function AttendancePage() {
         <thead><tr><th>Child</th><th>Age</th><th>Class</th><th>Guardian</th><th>Phone</th><th>Service</th><th>In</th>${outHeader}</tr></thead>
         <tbody>${visible.map(childRow).join('')}</tbody>
       </table>
-      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
     </body></html>`)
     win.document.close()
   }

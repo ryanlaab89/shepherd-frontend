@@ -450,8 +450,16 @@ export default function DashboardPage() {
       .here{display:inline-block;padding:1px 6px;border-radius:10px;background:#dcfce7;color:#16a34a;font-size:10px;font-weight:600}
       .med{color:#d97706;font-size:11px}
 
-      @media print{body{padding:16px} .card-grid{grid-template-columns:1fr 1fr}}
+      .pbar{display:flex;gap:8px;margin-bottom:20px}
+      .pbtn{padding:8px 18px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600}
+      .pbtn-p{background:#1A3A8C;color:#fff;border:none}
+      .pbtn-c{background:#fff;border:1.5px solid #e2e8f0;color:#334155}
+      @media print{body{padding:16px}.card-grid{grid-template-columns:1fr 1fr}.pbar{display:none!important}}
     </style></head><body>
+      <div class="pbar">
+        <button class="pbtn pbtn-p" onclick="window.print();window.onafterprint=function(){window.close()}">Print</button>
+        <button class="pbtn pbtn-c" onclick="window.close()">✕ Close</button>
+      </div>
 
       <!-- Header -->
       <div class="header">
@@ -478,7 +486,6 @@ export default function DashboardPage() {
       <div class="section-label">Attendance List</div>
       ${detailSections}
 
-      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
     </body></html>`)
     win.document.close()
   }

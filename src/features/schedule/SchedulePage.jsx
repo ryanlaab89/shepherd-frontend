@@ -221,8 +221,16 @@ export default function SchedulePage() {
       .vol{color:#334155}
       .empty{color:#cbd5e1}
       .sub{color:#94a3b8;font-size:10px}
-      @media print{body{padding:16px}.grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}}
+      .pbar{display:flex;gap:8px;margin-bottom:20px}
+      .pbtn{padding:8px 18px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600}
+      .pbtn-p{background:#1A3A8C;color:#fff;border:none}
+      .pbtn-c{background:#fff;border:1.5px solid #e2e8f0;color:#334155}
+      @media print{body{padding:16px}.grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}.pbar{display:none!important}}
     </style></head><body>
+      <div class="pbar">
+        <button class="pbtn pbtn-p" onclick="window.print();window.onafterprint=function(){window.close()}">Print</button>
+        <button class="pbtn pbtn-c" onclick="window.close()">✕ Close</button>
+      </div>
       <div class="header">
         <div class="header-left">
           <div class="org">${churchName}</div>
@@ -238,7 +246,6 @@ export default function SchedulePage() {
       <div class="section-label">By Service</div>
       <div class="grid">${byServiceHtml}</div>
       ${byClassHtml ? `<div class="section-label">By Class</div><div class="grid">${byClassHtml}</div>` : ''}
-      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
     </body></html>`)
     win.document.close()
   }

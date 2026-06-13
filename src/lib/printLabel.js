@@ -40,13 +40,17 @@ export async function printCheckinLabel(checkin, showCheckout = true, churchName
         .code { font-size: 12px; font-weight: 700; color: #1A3A8C; letter-spacing: 0.22em; font-family: monospace; }
         .footer { display: flex; align-items: flex-end; justify-content: space-between; flex-shrink: 0; }
         .time { font-size: 9px; color: #94a3b8; text-align: right; line-height: 1.5; }
+        .close-btn { display:block;margin-bottom:10px;padding:7px 16px;border-radius:8px;
+          border:1.5px solid #e2e8f0;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;color:#334155; }
         @media print {
           body { margin: 0; }
           .label { border: 2px solid #1A3A8C !important; }
+          .close-btn { display: none; }
         }
       </style>
     </head>
     <body>
+      <button class="close-btn" onclick="window.close()">✕ Close</button>
       <div class="label">
         <div class="header">
           <div class="dot"></div>
