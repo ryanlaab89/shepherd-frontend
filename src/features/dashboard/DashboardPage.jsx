@@ -1277,6 +1277,28 @@ function IndeterminateCheckbox({ checked, indeterminate, onChange }) {
   )
 }
 
+function CardCheckbox({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={e => { e.stopPropagation(); onChange() }}
+      className={`mt-1 w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border-2 transition-colors ${
+        checked
+          ? 'bg-[var(--primary)] border-[var(--primary)]'
+          : 'bg-transparent border-[var(--border)]'
+      }`}
+    >
+      {checked && (
+        <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 function SortTh({ label, field, sortField, sortDir, toggleSort }) {
   const active = sortField === field
   return (
@@ -1338,13 +1360,7 @@ function MobileCheckinCard({
         'bg-[var(--card)] active:bg-[var(--muted)]/40'
       }`}>
       <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={isSelecting}
-          onChange={() => onToggle(c.id)}
-          onClick={e => e.stopPropagation()}
-          className="mt-1 rounded border-[var(--border)] accent-[var(--primary)] cursor-pointer flex-shrink-0"
-        />
+        <CardCheckbox checked={isSelecting} onChange={() => onToggle(c.id)} />
         <div className="flex-1 min-w-0">
           {/* Name row */}
           <div className="flex items-center justify-between gap-2">
