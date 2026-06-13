@@ -1,7 +1,13 @@
+import QRCode from 'qrcode'
+
 export default function ConfirmationStep({ checkin, showCheckout = true, onAnother, household, onSiblingCheckIn }) {
-  function printLabel() {
+  async function printLabel() {
     const guardianLine = checkin.guardian_name
       ? `<div class="guardian">Guardian: ${checkin.guardian_name}</div>`
+      : ''
+
+    const qrImgTag = showCheckout
+      ? `<img src="${await QRCode.toDataURL(checkin.pickup_code, { width: 80, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })}" width="80" height="80" />`
       : ''
 
     const win = window.open('', '_blank')
@@ -18,20 +24,21 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
             width: 4in; height: 2.5in;
             border: 2px solid #1A3A8C;
             border-radius: 12px;
-            padding: 16px 20px;
+            padding: 14px 18px;
             display: flex; flex-direction: column; justify-content: space-between;
+            overflow: hidden;
           }
           .header { display: flex; align-items: center; gap: 8px; }
-          .dot { width: 10px; height: 10px; border-radius: 50%; background: #1A3A8C; }
-          .app-name { font-size: 11px; font-weight: 600; color: #1A3A8C; letter-spacing: 0.08em; text-transform: uppercase; }
-          .child-name { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; }
-          .service { font-size: 12px; color: #64748b; margin-top: 2px; }
-          .guardian { font-size: 11px; color: #475569; margin-top: 3px; font-weight: 600; }
-          .qr-section { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-          .qr-section canvas { display: block; }
-          .code { font-size: 13px; font-weight: 700; color: #1A3A8C; letter-spacing: 0.22em; font-family: monospace; }
-          .footer { display: flex; align-items: flex-end; justify-content: space-between; }
-          .time { font-size: 10px; color: #94a3b8; text-align: right; line-height: 1.5; }
+          .dot { width: 9px; height: 9px; border-radius: 50%; background: #1A3A8C; flex-shrink: 0; }
+          .app-name { font-size: 10px; font-weight: 600; color: #1A3A8C; letter-spacing: 0.08em; text-transform: uppercase; }
+          .child-name { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .service { font-size: 11px; color: #64748b; margin-top: 2px; }
+          .guardian { font-size: 10px; color: #475569; margin-top: 2px; font-weight: 600; }
+          .qr-section { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; flex-shrink: 0; }
+          .qr-section img { display: block; }
+          .code { font-size: 12px; font-weight: 700; color: #1A3A8C; letter-spacing: 0.22em; font-family: monospace; }
+          .footer { display: flex; align-items: flex-end; justify-content: space-between; flex-shrink: 0; }
+          .time { font-size: 9px; color: #94a3b8; text-align: right; line-height: 1.5; }
           @media print {
             body { margin: 0; }
             .label { border: 2px solid #1A3A8C !important; }
@@ -44,7 +51,7 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
             <div class="dot"></div>
             <span class="app-name">Shepherd Check-In</span>
           </div>
-          <div>
+          <div style="min-width:0">
             <div class="child-name">${checkin.person.first_name} ${checkin.person.last_name}</div>
             <div class="service">${checkin.service.name}</div>
             ${guardianLine}
@@ -52,7 +59,7 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
           <div class="footer">
             ${showCheckout ? `
             <div class="qr-section">
-              <canvas id="qr"></canvas>
+              ${qrImgTag}
               <div class="code">${checkin.pickup_code}</div>
             </div>` : '<div></div>'}
             <div class="time">
@@ -61,21 +68,8 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
             </div>
           </div>
         </div>
-        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"><\/script>
         <script>
-          window.onload = () => {
-            ${showCheckout ? `
-            QRCode.toCanvas(document.getElementById('qr'), '${checkin.pickup_code}', {
-              width: 88,
-              margin: 1,
-              color: { dark: '#0f172a', light: '#ffffff' },
-            }, function() {
-              window.print();
-              window.onafterprint = () => window.close();
-            });` : `
-            window.print();
-            window.onafterprint = () => window.close();`}
-          };
+          window.onload = () => { window.print(); window.onafterprint = () => window.close(); };
         <\/script>
       </body>
       </html>
