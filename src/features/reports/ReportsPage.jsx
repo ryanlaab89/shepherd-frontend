@@ -145,8 +145,11 @@ export default function ReportsPage() {
       td{padding:5px 14px;border-bottom:1px solid #f8fafc;vertical-align:middle}
       tr:last-child td{border-bottom:none}
       .num{text-align:right;font-weight:700;color:#1A3A8C}
-      @media print{body{padding:16px}.grid-2{grid-template-columns:1fr 1fr}}
+      .close-btn{position:fixed;top:12px;right:12px;padding:6px 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;font-size:12px;font-family:inherit;cursor:pointer;color:#334155;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+      .close-btn:active{background:#f8fafc}
+      @media print{body{padding:16px}.grid-2{grid-template-columns:1fr 1fr}.close-btn{display:none}}
     </style></head><body>
+      <button class="close-btn" onclick="window.close()">✕ Close</button>
       <div class="header">
         <div class="header-left">
           <div class="org">${churchName}</div>
@@ -252,8 +255,11 @@ export default function ReportsPage() {
       tr:last-child td{border-bottom:none}
       tr:nth-child(even) td{background:#fafafa}
       .num{text-align:right;font-weight:700;color:#1A3A8C}
-      @media print{body{padding:16px}}
+      .close-btn{position:fixed;top:12px;right:12px;padding:6px 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;font-size:12px;font-family:inherit;cursor:pointer;color:#334155;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+      .close-btn:active{background:#f8fafc}
+      @media print{body{padding:16px}.close-btn{display:none}}
     </style></head><body>
+      <button class="close-btn" onclick="window.close()">✕ Close</button>
       <div class="header">
         <div class="header-left">
           <div class="org">${churchName}</div>
