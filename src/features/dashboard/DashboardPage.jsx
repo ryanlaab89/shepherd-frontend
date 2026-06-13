@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@apollo/client'
 import { useToast } from '@/contexts/ToastContext'
@@ -8,6 +8,7 @@ import {
   TODAY_CLASS_SESSIONS_QUERY,
   SERVICES_QUERY,
   USERS_QUERY,
+  SCHEDULES_QUERY,
 } from '@/graphql/queries'
 import {
   SET_CLASS_SESSION_MUTATION,
@@ -39,17 +40,21 @@ export default function DashboardPage() {
   const [batchLoading,    setBatchLoading]    = useState(false)
   const [quickCode,       setQuickCode]       = useState('')
   const [quickLoading,    setQuickLoading]    = useState(false)
+  const [view,            setView]            = useState('table') // 'table' | 'summary'
   const prevServiceRef = useRef(null)
+  const today = useMemo(() => new Date().toISOString().split('T')[0], [])
   const navigate = useNavigate()
 
   const { data: classData  } = useQuery(TODAY_CLASS_SESSIONS_QUERY, { fetchPolicy: 'cache-and-network', pollInterval: 60000 })
   const { data: usersData  } = useQuery(USERS_QUERY)
   const { data: servicesData } = useQuery(SERVICES_QUERY)
   const { data: settingsData } = useQuery(CHURCH_SETTINGS_QUERY)
+  const { data: schedulesData } = useQuery(SCHEDULES_QUERY, { variables: { date: today }, fetchPolicy: 'cache-and-network' })
 
   const classes    = classData?.todayClassSessions ?? []
   const staffList  = usersData?.users ?? []
   const allServices = servicesData?.services ?? []
+  const schedules   = schedulesData?.schedules ?? []
   const showCheckout = (settingsData?.churchSettings?.show_checkout ?? true) ||
                        (settingsData?.churchSettings?.require_checkout ?? false)
 
@@ -253,6 +258,91 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url)
   }
 
+  function printReport() {
+    const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    const servicesInData = Array.from(new Map(rawList.map(c => [c.service.id, c.service])).values())
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    function summarise(rows, svcId) {
+      const r = svcId ? rows.filter(c => c.service.id === svcId) : rows
+      const sch = svcId ? schedules.filter(s => s.service?.id === svcId) : schedules
+      const byClass = {}
+      r.forEach(c => { const n = c.classGroup?.name ?? 'Unassigned'; byClass[n] = (byClass[n] || 0) + 1 })
+      return {
+        total: r.length,
+        stillHere: r.filter(c => !c.checked_out_at).length,
+        checkedOut: r.filter(c => c.checked_out_at).length,
+        byClass,
+        guardians: new Set(r.filter(c => c.guardian_name).map(c => c.guardian_name)).size,
+        volunteers: new Set(sch.map(s => s.user.id)).size,
+      }
+    }
+
+    const CLASS_ORDER = ['Toddler', 'Pre School', 'Primary', 'Pre Teens']
+    const AGE_RANGES  = { Toddler: '0–3', 'Pre School': '4–6', Primary: '7–8', 'Pre Teens': '9–12' }
+
+    function classRows(byClass) {
+      const order = [...CLASS_ORDER, ...Object.keys(byClass).filter(k => !CLASS_ORDER.includes(k))]
+      return order
+        .filter(k => byClass[k])
+        .map(k => `<tr><td>${k}${AGE_RANGES[k] ? ` <span class="age">(${AGE_RANGES[k]})</span>` : ''}</td><td>${byClass[k]}</td></tr>`)
+        .join('')
+    }
+
+    function card(title, s) {
+      return `
+        <div class="card">
+          <h3>${title}</h3>
+          <div class="trio">
+            <div class="stat"><div class="num">${s.total}</div><div class="lbl">Total Kids</div></div>
+            <div class="stat"><div class="num">${s.stillHere}</div><div class="lbl">Still Here</div></div>
+            <div class="stat"><div class="num">${s.checkedOut}</div><div class="lbl">Checked Out</div></div>
+          </div>
+          ${Object.keys(s.byClass).length ? `
+          <table class="ag">
+            <thead><tr><th>Age Group</th><th>Kids</th></tr></thead>
+            <tbody>${classRows(s.byClass)}</tbody>
+          </table>` : ''}
+          <div class="footer-stats">
+            <span>👨‍👩‍👧 Guardians: <strong>${s.guardians}</strong></span>
+            <span>🙋 Volunteers: <strong>${s.volunteers}</strong></span>
+          </div>
+        </div>`
+    }
+
+    const allDay = summarise(rawList, null)
+    const svcCards = servicesInData.map(s => card(s.name, summarise(rawList, s.id))).join('')
+
+    const win = window.open('', '_blank')
+    win.document.write(`<!DOCTYPE html><html><head><title>Attendance Report</title><style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+      *{margin:0;padding:0;box-sizing:border-box} body{font-family:'Plus Jakarta Sans',sans-serif;padding:32px;color:#0f172a}
+      h1{font-size:22px;font-weight:800;margin-bottom:4px} .sub{color:#64748b;font-size:13px;margin-bottom:24px}
+      h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1A3A8C;margin:24px 0 12px}
+      .card{border:1.5px solid #e2e8f0;border-radius:12px;padding:18px;break-inside:avoid;margin-bottom:14px}
+      .card h3{font-size:15px;font-weight:700;margin-bottom:12px;color:#0f172a}
+      .trio{display:flex;gap:12px;margin-bottom:14px}
+      .stat{flex:1;background:#f8fafc;border-radius:8px;padding:10px;text-align:center}
+      .num{font-size:24px;font-weight:800;color:#1A3A8C} .lbl{font-size:11px;color:#64748b;margin-top:2px}
+      .ag{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px}
+      .ag th{text-align:left;padding:6px 8px;background:#f1f5f9;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+      .ag td{padding:5px 8px;border-top:1px solid #f1f5f9} .age{color:#94a3b8;font-size:11px}
+      .footer-stats{display:flex;gap:16px;font-size:12px;color:#64748b;padding-top:8px;border-top:1px solid #f1f5f9}
+      .footer-stats strong{color:#0f172a}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+      @media print{body{padding:16px}}
+    </style></head><body>
+      <h1>Attendance Report</h1>
+      <div class="sub">${date}</div>
+      <h2>Whole Day</h2>
+      ${card('All Services Combined', allDay)}
+      <h2>Per Service</h2>
+      <div class="grid">${svcCards}</div>
+      <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}<\/script>
+    </body></html>`)
+    win.document.close()
+  }
+
   const isAutoService = filterServiceId === autoService && !!autoService
 
   return (
@@ -334,8 +424,36 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-sm font-semibold text-[var(--foreground)]">Today's Attendance</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--muted-foreground)]">Auto-refreshes every 30s</span>
-            {checkins.length > 0 && (
+            <span className="text-xs text-[var(--muted-foreground)] hidden sm:inline">Auto-refreshes every 30s</span>
+            {/* View toggle */}
+            <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs font-medium">
+              <button
+                onClick={() => setView('table')}
+                className={`px-3 py-1.5 transition-colors ${view === 'table'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+              >Table</button>
+              <button
+                onClick={() => setView('summary')}
+                className={`px-3 py-1.5 transition-colors border-l border-[var(--border)] ${view === 'summary'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+              >Summary</button>
+            </div>
+            {view === 'summary' ? (
+              <button
+                onClick={printReport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)]
+                  text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50
+                  transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Report
+              </button>
+            ) : checkins.length > 0 && (
               <button
                 onClick={exportCSV}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)]
@@ -352,8 +470,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Summary view */}
+        {view === 'summary' && (
+          <SummaryView rawList={rawList} schedules={schedules} />
+        )}
+
         {/* Quick checkout by pickup code */}
-        {showCheckout && (
+        {view === 'table' && showCheckout && (
           <form onSubmit={handleQuickCheckout} className="flex items-center gap-2 mb-3">
             <div className="relative">
               <input
@@ -385,8 +508,8 @@ export default function DashboardPage() {
           </form>
         )}
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mb-3">
+        {/* Filters + table — hidden in summary mode */}
+        {view === 'table' && <><div className="flex flex-wrap gap-2 mb-3">
           <div className="relative">
             <select value={filterServiceId} onChange={e => setFilterServiceId(e.target.value)} className={filterSelect}>
               <option value="">All services</option>
@@ -612,6 +735,7 @@ export default function DashboardPage() {
           </div>
           </>
         )}
+      </>}
       </div>
     </div>
   )
@@ -1000,3 +1124,122 @@ const sessionInput = `w-full px-3 py-2 rounded-lg border border-[var(--input)] b
 const filterSelect = `px-3 py-2 rounded-lg border border-[var(--input)] bg-[var(--background)]
   text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/50
   focus:border-[var(--ring)] transition-colors cursor-pointer`
+
+// ── Summary View ──────────────────────────────────────────────────────────────
+
+const CLASS_ORDER  = ['Toddler', 'Pre School', 'Primary', 'Pre Teens']
+const AGE_LABELS   = { Toddler: '0–3', 'Pre School': '4–6', Primary: '7–8', 'Pre Teens': '9–12' }
+
+function computeSummary(rows, schedules, serviceId = null) {
+  const r   = serviceId ? rows.filter(c => c.service.id === serviceId) : rows
+  const sch = serviceId ? schedules.filter(s => s.service?.id === serviceId) : schedules
+  const byClass = {}
+  r.forEach(c => { const n = c.classGroup?.name ?? 'Unassigned'; byClass[n] = (byClass[n] || 0) + 1 })
+  return {
+    total:      r.length,
+    stillHere:  r.filter(c => !c.checked_out_at).length,
+    checkedOut: r.filter(c => c.checked_out_at).length,
+    byClass,
+    guardians:  new Set(r.filter(c => c.guardian_name).map(c => c.guardian_name)).size,
+    volunteers: new Set(sch.map(s => s.user.id)).size,
+  }
+}
+
+function SummaryCard({ title, stats, highlight = false }) {
+  const orderedClasses = [
+    ...CLASS_ORDER.filter(k => stats.byClass[k]),
+    ...Object.keys(stats.byClass).filter(k => !CLASS_ORDER.includes(k) && stats.byClass[k]),
+  ]
+  return (
+    <div className={`rounded-xl border p-4 ${highlight
+      ? 'border-[var(--primary)]/30 bg-[var(--primary)]/5'
+      : 'border-[var(--border)] bg-[var(--card)]'}`}>
+      <h3 className={`text-sm font-bold mb-3 ${highlight ? 'text-[var(--primary)]' : 'text-[var(--foreground)]'}`}>
+        {title}
+      </h3>
+
+      {/* Top stats */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {[
+          { label: 'Total Kids', value: stats.total, bold: true },
+          { label: 'Still Here', value: stats.stillHere },
+          { label: 'Checked Out', value: stats.checkedOut },
+        ].map(({ label, value, bold }) => (
+          <div key={label} className="rounded-lg bg-[var(--muted)]/60 p-2.5 text-center">
+            <p className={`text-xl font-bold ${bold ? 'text-[var(--primary)]' : 'text-[var(--foreground)]'}`}>{value}</p>
+            <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5 leading-tight">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* By age group */}
+      {orderedClasses.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">By Age Group</p>
+          <div className="space-y-1">
+            {orderedClasses.map(name => (
+              <div key={name} className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                  <span className="text-sm font-medium text-[var(--foreground)] truncate">{name}</span>
+                  {AGE_LABELS[name] && (
+                    <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0">{AGE_LABELS[name]}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Bar */}
+                  <div className="w-16 h-1.5 rounded-full bg-[var(--muted)] overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--primary)]"
+                      style={{ width: `${stats.total ? (stats.byClass[name] / stats.total) * 100 : 0}%` }} />
+                  </div>
+                  <span className="text-sm font-bold text-[var(--foreground)] w-5 text-right">{stats.byClass[name]}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Footer stats */}
+      <div className="flex gap-4 pt-2.5 border-t border-[var(--border)] text-xs text-[var(--muted-foreground)]">
+        <span>Guardians <strong className="text-[var(--foreground)]">{stats.guardians}</strong></span>
+        <span>Volunteers <strong className="text-[var(--foreground)]">{stats.volunteers}</strong></span>
+      </div>
+    </div>
+  )
+}
+
+function SummaryView({ rawList, schedules }) {
+  if (rawList.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-32 text-[var(--muted-foreground)]
+      border border-dashed border-[var(--border)] rounded-xl text-sm">
+      No check-ins recorded today yet
+    </div>
+  )
+
+  const dayStats = computeSummary(rawList, schedules)
+  const servicesInData = Array.from(new Map(rawList.map(c => [c.service.id, c.service])).values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return (
+    <div className="space-y-4">
+      {/* Whole Day */}
+      <SummaryCard title="Whole Day — All Services" stats={dayStats} highlight />
+
+      {/* Per Service */}
+      {servicesInData.length > 1 && (
+        <>
+          <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider pt-1">Per Service</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {servicesInData.map(svc => (
+              <SummaryCard
+                key={svc.id}
+                title={svc.name}
+                stats={computeSummary(rawList, schedules, svc.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
