@@ -70,7 +70,7 @@ export async function printCheckinLabel(checkin, showCheckout = true, churchName
         </div>
       </div>
       <script>
-        window.onload = () => { window.print(); window.onafterprint = () => window.close(); };
+        setTimeout(function(){ window.print(); window.onafterprint = function(){ window.close(); }; }, 300);
       <\/script>
     </body>
     </html>
