@@ -84,6 +84,8 @@ export const ATTENDANCE_REPORT_QUERY = gql`
     attendanceReport(startDate: $startDate, endDate: $endDate) {
       total
       avg_per_day
+      unique_children
+      first_time_visitors
       by_day { date count }
       by_class { class_name count }
       by_service { service_name count }

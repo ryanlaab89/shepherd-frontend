@@ -62,6 +62,8 @@ export default function ReportsPage() {
       ['Summary'],
       ['Metric', 'Value'],
       ['Total Check-ins', report.total],
+      ['Unique Children', report.unique_children],
+      ['First-time Visitors', report.first_time_visitors],
       ['Avg per Day', report.avg_per_day],
       ['Days Tracked', days],
       [],
@@ -143,6 +145,8 @@ export default function ReportsPage() {
       <div class="section-label">Summary</div>
       <div class="stat-row">
         <div class="stat"><div class="num">${report.total}</div><div class="lbl">Total Check-ins</div></div>
+        <div class="stat"><div class="num">${report.unique_children}</div><div class="lbl">Unique Children</div></div>
+        <div class="stat"><div class="num">${report.first_time_visitors}</div><div class="lbl">First-time Visitors</div></div>
         <div class="stat"><div class="num">${report.avg_per_day}</div><div class="lbl">Avg per Day</div></div>
         <div class="stat"><div class="num">${days}</div><div class="lbl">Days Tracked</div></div>
       </div>
@@ -199,6 +203,63 @@ export default function ReportsPage() {
     a.download = `guardian-contacts-${range.start}-${range.end}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  function printContacts() {
+    if (!contacts.length) return
+    const rangeLabel = `${fmtDate(range.start)} – ${fmtDate(range.end)}`
+    const timeStr    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const rows = contacts.map(c => `
+      <tr>
+        <td>${c.child_name}</td>
+        <td>${c.class_name ?? '—'}</td>
+        <td>${c.guardian_name ?? '—'}</td>
+        <td>${c.guardian_phone ?? '—'}</td>
+        <td>${new Date(c.last_visit).toLocaleDateString()}</td>
+        <td class="num">${c.visit_count}</td>
+      </tr>`).join('')
+    const win = window.open('', '_blank')
+    win.document.write(`<!DOCTYPE html><html><head><title>Guardian Contacts</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+      .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}
+      .header-left .org{font-size:11px;font-weight:700;color:#1A3A8C;text-transform:uppercase;letter-spacing:.1em}
+      .header-left .title{font-size:22px;font-weight:800;color:#0f172a;margin-top:2px}
+      .header-left .date{font-size:13px;color:#64748b;margin-top:3px}
+      .header-right{text-align:right;font-size:11px;color:#94a3b8;line-height:1.8}
+      .header-right strong{color:#64748b}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+      th{text-align:left;padding:8px 12px;font-size:10px;font-weight:600;text-transform:uppercase;
+        letter-spacing:.05em;color:#64748b;background:#f8fafc;border-bottom:2px solid #e2e8f0}
+      td{padding:7px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;color:#334155}
+      tr:last-child td{border-bottom:none}
+      tr:nth-child(even) td{background:#fafafa}
+      .num{text-align:right;font-weight:700;color:#1A3A8C}
+      @media print{body{padding:16px}}
+    </style></head><body>
+      <div class="header">
+        <div class="header-left">
+          <div class="org">${churchName}</div>
+          <div class="title">Guardian Contacts</div>
+          <div class="date">${rangeLabel}</div>
+        </div>
+        <div class="header-right">
+          <div>Printed: <strong>${timeStr}</strong></div>
+          <div>Total: <strong>${contacts.length} families</strong></div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Child</th><th>Class</th><th>Guardian</th>
+            <th>Phone</th><th>Last Visit</th><th class="num">Visits</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
+    </body></html>`)
+    win.document.close()
   }
 
   return (
@@ -274,7 +335,7 @@ export default function ReportsPage() {
         <OverviewTab report={report} loading={reportLoading} range={range} days={days} />
       )}
       {tab === 'contacts' && (
-        <ContactsTab contacts={contacts} loading={contactsLoading} onExport={exportContacts} />
+        <ContactsTab contacts={contacts} loading={contactsLoading} onExport={exportContacts} onPrint={printContacts} />
       )}
     </div>
   )
@@ -292,9 +353,15 @@ function OverviewTab({ report, loading, range, days }) {
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <MetricCard label="Total Check-ins" value={report.total} />
-        <MetricCard label="Avg per Day" value={report.avg_per_day} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <MetricCard label="Total Check-ins" value={report.total}
+          hint="Every check-in event, including children who attended more than one service." />
+        <MetricCard label="Unique Children" value={report.unique_children}
+          hint="Distinct children who attended — each child counted once no matter how many services they went to." />
+        <MetricCard label="First-time Visitors" value={report.first_time_visitors}
+          hint="Children checking in for the very first time ever — they had no previous visits before this period." />
+        <MetricCard label="Avg per Day" value={report.avg_per_day}
+          hint="Average total check-ins per day across the selected period." />
         <MetricCard label="Days Tracked" value={days} />
       </div>
 
@@ -376,7 +443,7 @@ function OverviewTab({ report, loading, range, days }) {
   )
 }
 
-function ContactsTab({ contacts, loading, onExport }) {
+function ContactsTab({ contacts, loading, onExport, onPrint }) {
   const [search,       setSearch]       = useState('')
   const [filterClass,  setFilterClass]  = useState('')
   const [sortField,    setSortField]    = useState('child_name')
@@ -441,15 +508,28 @@ function ContactsTab({ contacts, loading, onExport }) {
             className={inputClass + ' pl-9'} />
         </div>
 
-        <button onClick={onExport}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)]
-            text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors flex-shrink-0">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Export CSV
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={onPrint} disabled={!contacts.length}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+              text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:border-[var(--primary)]/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print
+          </button>
+          <button onClick={onExport} disabled={!contacts.length}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+              text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+              hover:border-[var(--primary)]/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -519,10 +599,27 @@ function ReportSortHeader({ label, field, sortField, sortDir, onSort, align = 'l
   )
 }
 
-function MetricCard({ label, value }) {
+function MetricCard({ label, value, hint }) {
   return (
     <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
-      <p className="text-sm text-[var(--muted-foreground)] mb-2">{label}</p>
+      <div className="flex items-center gap-1.5 mb-2">
+        <p className="text-sm text-[var(--muted-foreground)]">{label}</p>
+        {hint && (
+          <span className="relative group/hint flex-shrink-0">
+            <svg className="w-3.5 h-3.5 text-[var(--muted-foreground)]/50 cursor-help"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+              w-52 rounded-lg bg-[var(--foreground)] text-[var(--background)]
+              text-xs px-2.5 py-1.5 opacity-0 group-hover/hint:opacity-100 transition-opacity
+              z-50 shadow-sm text-center leading-relaxed">
+              {hint}
+            </span>
+          </span>
+        )}
+      </div>
       <p className="text-3xl font-bold text-[var(--foreground)]">{value}</p>
     </div>
   )
