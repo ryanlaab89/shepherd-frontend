@@ -28,12 +28,20 @@ const cache = new InMemoryCache({
   },
 })
 
-export default new ApolloClient({
+const client = new ApolloClient({
   link: authLink.concat(httpLink),
   cache,
-  // Static data (services, users, classes, settings) use cache-first.
-  // Queries that need live data override with cache-and-network + pollInterval.
   defaultOptions: {
     watchQuery: { fetchPolicy: 'cache-and-network' },
   },
 })
+
+// Refetch all active queries when the tab/app comes back into view.
+// Fixes stale empty-cache reads on mobile where tabs stay alive in the background.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    client.refetchQueries({ include: 'active' })
+  }
+})
+
+export default client
