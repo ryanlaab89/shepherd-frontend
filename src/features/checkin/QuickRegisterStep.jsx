@@ -75,7 +75,7 @@ export default function QuickRegisterStep({ mode = 'new', household, prefillFirs
         </button>
         <div>
           <p className="font-semibold text-[var(--foreground)]">
-            {isNew ? 'New Family' : `Add child to ${household?.last_name} family`}
+            {isNew ? 'New Child' : `Add child to ${household?.last_name} family`}
           </p>
           <p className="text-xs text-[var(--muted-foreground)]">Required fields only — tap below to add more</p>
         </div>
@@ -89,7 +89,7 @@ export default function QuickRegisterStep({ mode = 'new', household, prefillFirs
         {/* ── Required fields ── */}
         {isNew && (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Family Last Name *">
+            <Field label="Last Name *">
               <input
                 required
                 value={form.guardian_last_name}

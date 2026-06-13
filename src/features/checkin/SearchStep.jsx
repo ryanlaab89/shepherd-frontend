@@ -186,7 +186,7 @@ export default function SearchStep({ onSelectPerson }) {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Not listed? Register a new family
+              Not listed? Register a new child
             </button>
           )}
         </div>
@@ -378,7 +378,7 @@ function InlineRegisterForm({ prefillFirstName, onDone, onCancel, registerChild,
   return (
     <div className="rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/3 p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-[var(--foreground)]">New Family</p>
+        <p className="text-sm font-semibold text-[var(--foreground)]">New Child</p>
         <button onClick={onCancel}
           className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
           Cancel
@@ -397,7 +397,7 @@ function InlineRegisterForm({ prefillFirstName, onDone, onCancel, registerChild,
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Family Last Name *">
+          <Field label="Last Name *">
             <input required value={form.guardian_last_name} onChange={set('guardian_last_name')}
               className={inputClass} placeholder="Smith" />
           </Field>
