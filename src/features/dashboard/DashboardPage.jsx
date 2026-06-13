@@ -403,9 +403,8 @@ export default function DashboardPage() {
 
     const win = window.open('', '_blank')
     win.document.write(`<!DOCTYPE html><html><head><title>Attendance Report — ${dateStr}</title><style>
-      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'Plus Jakarta Sans',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+      body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px;color:#0f172a;font-size:13px}
 
       /* Header */
       .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}

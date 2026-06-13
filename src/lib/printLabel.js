@@ -19,9 +19,8 @@ export async function printCheckinLabel(checkin, showCheckout = true, churchName
     <head>
       <title>Check-In Label</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
         .label {
           width: 4in; height: 2.5in;
           border: 2px solid #1A3A8C;
