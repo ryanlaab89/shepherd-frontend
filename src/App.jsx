@@ -16,6 +16,8 @@ import ProfilePage from '@/features/profile/ProfilePage'
 import ChildrenPage from '@/features/children/ChildrenPage'
 import AttendancePage from '@/features/attendance/AttendancePage'
 import SchedulePage from '@/features/schedule/SchedulePage'
+import TermsPage from '@/features/legal/TermsPage'
+import PrivacyPage from '@/features/legal/PrivacyPage'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth()
@@ -41,6 +43,8 @@ export default function App() {
       <AuthProvider>
       <ToastProvider>
         <Routes>
+          <Route path="/terms"   element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route
             path="/*"

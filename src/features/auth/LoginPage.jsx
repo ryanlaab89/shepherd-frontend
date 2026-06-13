@@ -187,6 +187,18 @@ export default function LoginPage() {
                   </Field>
                 </div>
                 <SubmitButton loading={loading}>Create Church</SubmitButton>
+                <p className="text-xs text-center text-[var(--muted-foreground)] leading-relaxed">
+                  By creating an account, you agree to our{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-[var(--foreground)] transition-colors">
+                    Terms of Service
+                  </a>
+                  {' '}and{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-[var(--foreground)] transition-colors">
+                    Privacy Policy
+                  </a>.
+                </p>
               </form>
             )}
           </div>
