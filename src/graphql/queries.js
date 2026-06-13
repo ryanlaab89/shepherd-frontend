@@ -260,3 +260,55 @@ export const CHURCH_SETTINGS_QUERY = gql`
     }
   }
 `
+
+export const SCHEDULES_QUERY = gql`
+  query Schedules($date: Date!) {
+    schedules(date: $date) {
+      id
+      date
+      is_lead
+      user { id name role }
+      classGroup { id name }
+      service { id name start_time }
+    }
+  }
+`
+
+export const MY_SCHEDULE_QUERY = gql`
+  query MySchedule {
+    mySchedule {
+      id
+      date
+      is_lead
+      classGroup { id name }
+      service { id name start_time }
+    }
+  }
+`
+
+export const ASSIGN_TEACHER_MUTATION = gql`
+  mutation AssignTeacher($classId: ID!, $serviceId: ID!, $userId: ID!, $date: Date!, $isLead: Boolean) {
+    assignTeacher(classId: $classId, serviceId: $serviceId, userId: $userId, date: $date, isLead: $isLead) {
+      id
+      is_lead
+      user { id name }
+      classGroup { id name }
+      service { id name start_time }
+    }
+  }
+`
+
+export const REMOVE_TEACHER_MUTATION = gql`
+  mutation RemoveTeacher($scheduleId: ID!) {
+    removeTeacher(scheduleId: $scheduleId)
+  }
+`
+
+export const SET_LEAD_MUTATION = gql`
+  mutation SetLead($scheduleId: ID!) {
+    setLead(scheduleId: $scheduleId) {
+      id
+      is_lead
+    }
+  }
+`

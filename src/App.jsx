@@ -14,6 +14,7 @@ import ReportsPage from '@/features/reports/ReportsPage'
 import ProfilePage from '@/features/profile/ProfilePage'
 import ChildrenPage from '@/features/children/ChildrenPage'
 import AttendancePage from '@/features/attendance/AttendancePage'
+import SchedulePage from '@/features/schedule/SchedulePage'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth()
@@ -56,6 +57,7 @@ export default function App() {
                     <Route path="/reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
                     <Route path="/children" element={<ChildrenPage />} />
                     <Route path="/attendance" element={<AttendancePage />} />
+                    <Route path="/schedule" element={<SchedulePage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                   </Routes>
                 </AppLayout>
