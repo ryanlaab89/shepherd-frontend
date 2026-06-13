@@ -296,7 +296,22 @@ export default function SchedulePage() {
 
       {isAdmin ? (
         services.length === 0 || classes.length === 0 ? (
-          <p className="text-sm text-[var(--muted-foreground)]">No services or classes configured.</p>
+          <div className="flex flex-col items-center justify-center py-20 rounded-xl
+            border border-dashed border-[var(--border)]">
+            <svg className="w-10 h-10 mb-3 text-[var(--muted-foreground)] opacity-40"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p className="text-sm font-medium text-[var(--foreground)]">Schedule isn&apos;t ready yet</p>
+            <p className="text-xs text-[var(--muted-foreground)] mt-1 text-center max-w-xs px-4">
+              {services.length === 0 && classes.length === 0
+                ? 'Set up your services and classes first, then assign teachers here.'
+                : services.length === 0
+                  ? 'Add at least one service before assigning teachers to the schedule.'
+                  : 'Add at least one class before assigning teachers to the schedule.'}
+            </p>
+          </div>
         ) : (
           <>
             {/* Mobile: cards per service */}

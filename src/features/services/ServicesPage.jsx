@@ -138,6 +138,26 @@ export default function ServicesPage() {
       {/* Services list */}
       {loading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
+      ) : services.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 rounded-xl
+          border border-dashed border-[var(--border)]">
+          <svg className="w-10 h-10 mb-3 text-[var(--muted-foreground)] opacity-40"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm font-medium text-[var(--foreground)]">No services yet</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1 mb-4 text-center max-w-xs px-4">
+            Add your Sunday morning, evening, or midweek services so check-in can auto-select the right one.
+          </p>
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); setForm(BLANK); setError('') }}
+            className="px-5 py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
+              text-sm font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+          >
+            Add First Service
+          </button>
+        </div>
       ) : (
         <div className="space-y-2">
           {services.map((svc) => (

@@ -218,6 +218,26 @@ export default function UsersPage() {
       {/* Users list */}
       {loading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
+      ) : users.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 rounded-xl
+          border border-dashed border-[var(--border)]">
+          <svg className="w-10 h-10 mb-3 text-[var(--muted-foreground)] opacity-40"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-sm font-medium text-[var(--foreground)]">You&apos;re the only one here</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1 mb-4 text-center max-w-xs px-4">
+            Add volunteers and teachers so they can help with check-in on Sunday.
+          </p>
+          <button
+            onClick={() => { setShowForm(true); setError('') }}
+            className="px-5 py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]
+              text-sm font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+          >
+            Add First Staff Member
+          </button>
+        </div>
       ) : (
         <div className="space-y-2">
           {users.map((u) => (
