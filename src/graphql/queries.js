@@ -89,6 +89,8 @@ export const ATTENDANCE_REPORT_QUERY = gql`
       by_day { date count }
       by_class { class_name count }
       by_service { service_name count }
+      trend_by_service { period name count }
+      trend_by_class { period name count }
     }
   }
 `

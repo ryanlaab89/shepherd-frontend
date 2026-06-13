@@ -3,7 +3,7 @@ import { useQuery } from '@apollo/client'
 import { ME_QUERY, ATTENDANCE_REPORT_QUERY, GUARDIAN_CONTACTS_QUERY } from '@/graphql/queries'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
+  ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
 
 const PRESETS = [
@@ -11,6 +11,23 @@ const PRESETS = [
   { label: 'Last 30 days', days: 30 },
   { label: 'Last 90 days', days: 90 },
 ]
+
+const TREND_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+
+function buildTrendData(trendArr) {
+  if (!trendArr?.length) return { data: [], names: [] }
+  const periods = [...new Set(trendArr.map(t => t.period))].sort()
+  const names   = [...new Set(trendArr.map(t => t.name))].sort()
+  const data = periods.map(p => {
+    const row = {
+      period: new Date(p + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    }
+    names.forEach(n => { row[n] = 0 })
+    trendArr.filter(t => t.period === p).forEach(t => { row[t.name] = t.count })
+    return row
+  })
+  return { data, names }
+}
 
 function toISODate(d) {
   return d.toISOString().split('T')[0]
@@ -341,6 +358,38 @@ export default function ReportsPage() {
   )
 }
 
+function TrendChart({ data, names, height = 220 }) {
+  const tooltipStyle = {
+    contentStyle: {
+      background: 'var(--card)',
+      border: '1px solid var(--border)',
+      borderRadius: '8px',
+      fontSize: '12px',
+    },
+    labelStyle: { color: 'var(--foreground)', fontWeight: 600 },
+  }
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="period" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+          tickLine={false} axisLine={false} interval="preserveStartEnd" />
+        <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+          tickLine={false} axisLine={false} allowDecimals={false} />
+        <Tooltip {...tooltipStyle} />
+        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+        {names.map((name, i) => (
+          <Line key={name} type="monotone" dataKey={name}
+            stroke={TREND_COLORS[i % TREND_COLORS.length]}
+            strokeWidth={2}
+            dot={{ r: 3, strokeWidth: 0, fill: TREND_COLORS[i % TREND_COLORS.length] }}
+            activeDot={{ r: 5 }} />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
 function OverviewTab({ report, loading, range, days }) {
   if (loading) return <div className="flex justify-center py-20"><Spinner /></div>
   if (!report)  return null
@@ -349,6 +398,9 @@ function OverviewTab({ report, loading, range, days }) {
     date:  new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     count: d.count,
   }))
+
+  const serviceTrend = buildTrendData(report.trend_by_service)
+  const classTrend   = buildTrendData(report.trend_by_class)
 
   return (
     <div className="space-y-6">
@@ -401,7 +453,7 @@ function OverviewTab({ report, loading, range, days }) {
       <div className="grid sm:grid-cols-2 gap-6">
         {/* By class */}
         {report.by_class.length > 0 && (
-          <ChartCard title="By Class">
+          <ChartCard title="By Class — Total">
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={report.by_class} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -421,7 +473,7 @@ function OverviewTab({ report, loading, range, days }) {
 
         {/* By service */}
         {report.by_service.length > 0 && (
-          <ChartCard title="By Service">
+          <ChartCard title="By Service — Total">
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={report.by_service} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -439,6 +491,26 @@ function OverviewTab({ report, loading, range, days }) {
           </ChartCard>
         )}
       </div>
+
+      {/* Trend over time — per service */}
+      {serviceTrend.data.length >= 2 && (
+        <ChartCard title="Service Attendance Trend">
+          <p className="text-xs text-[var(--muted-foreground)] mb-3">
+            How each service's check-in count changed over the selected period
+          </p>
+          <TrendChart data={serviceTrend.data} names={serviceTrend.names} />
+        </ChartCard>
+      )}
+
+      {/* Trend over time — per class */}
+      {classTrend.data.length >= 2 && (
+        <ChartCard title="Class Attendance Trend">
+          <p className="text-xs text-[var(--muted-foreground)] mb-3">
+            How each class's check-in count changed over the selected period
+          </p>
+          <TrendChart data={classTrend.data} names={classTrend.names} />
+        </ChartCard>
+      )}
     </div>
   )
 }
