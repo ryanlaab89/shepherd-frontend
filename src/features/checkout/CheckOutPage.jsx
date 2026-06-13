@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useLazyQuery, useQuery, useMutation } from '@apollo/client'
 import { CHECKIN_BY_CODE_QUERY, ACTIVE_CHECKINS_QUERY } from '@/graphql/queries'
 import { CHECK_OUT_MUTATION } from '@/graphql/mutations'
+import QrScanner from '@/components/QrScanner'
 
 export default function CheckOutPage() {
   const [confirmed, setConfirmed] = useState(null)
@@ -40,7 +41,7 @@ export default function CheckOutPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[var(--foreground)]">Check Out</h1>
         <p className="text-sm text-[var(--muted-foreground)] mt-1">
-          Scan the label barcode or search by child name
+          Scan the QR code on the label or search by child name
         </p>
       </div>
 
@@ -54,6 +55,7 @@ function ScanSearch({ onDone }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [showNameSearch, setShowNameSearch] = useState(false)
+  const [scanning, setScanning] = useState(false)
 
   const [searchByCode, { data, loading: searching }] = useLazyQuery(CHECKIN_BY_CODE_QUERY, {
     fetchPolicy: 'no-cache',
@@ -61,10 +63,9 @@ function ScanSearch({ onDone }) {
   const [checkOut, { loading: checkingOut }] = useMutation(CHECK_OUT_MUTATION)
   const foundCheckin = data?.checkinByCode
 
-  // Keep input focused so scanner can fire at any time
   useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+    if (!scanning) inputRef.current?.focus()
+  }, [scanning])
 
   async function handleSearch(value) {
     const trimmed = (value ?? code).trim().toUpperCase()
@@ -77,20 +78,20 @@ function ScanSearch({ onDone }) {
   }
 
   function handleChange(e) {
-    const val = e.target.value.toUpperCase()
-    setCode(val)
+    setCode(e.target.value.toUpperCase())
     setError('')
-    // Clear previous result when typing a new code
-    if (data?.checkinByCode) {
-      // searching again resets automatically via fetchPolicy: 'no-cache'
-    }
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSearch()
-    }
+    if (e.key === 'Enter') { e.preventDefault(); handleSearch() }
+  }
+
+  function handleQrScan(raw) {
+    setScanning(false)
+    const scanned = raw.trim().toUpperCase()
+    setCode(scanned)
+    setError('')
+    handleSearch(scanned)
   }
 
   async function handleCheckOut() {
@@ -104,83 +105,108 @@ function ScanSearch({ onDone }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Scanner / code input */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
-          <svg className="w-5 h-5 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-              d="M12 4H8a2 2 0 00-2 2v2M12 4h4a2 2 0 012 2v2M12 4v2m0 14H8a2 2 0 01-2-2v-2m8 4h4a2 2 0 002-2v-2M12 20v-2M4 12H2m20 0h-2M4 12v0M20 12v0" />
-          </svg>
-        </div>
-        <input
-          ref={inputRef}
-          value={code}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Scan barcode or type code…"
-          autoFocus
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          className="w-full pl-10 pr-24 py-3 rounded-xl border-2 border-[var(--input)] bg-[var(--background)]
-            text-[var(--foreground)] text-base font-mono tracking-wider
-            placeholder:text-[var(--muted-foreground)]/50 placeholder:font-sans placeholder:tracking-normal
-            focus:outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/15
+    <>
+      {scanning && (
+        <QrScanner onScan={handleQrScan} onClose={() => setScanning(false)} />
+      )}
+
+      <div className="space-y-4">
+        {/* Primary scan button */}
+        <button
+          onClick={() => setScanning(true)}
+          className="w-full py-5 rounded-2xl border-2 border-dashed border-[var(--primary)]/40
+            bg-[var(--primary)]/5 text-[var(--primary)]
+            flex flex-col items-center justify-center gap-2
+            hover:bg-[var(--primary)]/10 hover:border-[var(--primary)]/60 active:scale-[0.98]
             transition-all"
-        />
-        <button
-          onClick={() => handleSearch()}
-          disabled={!code.trim() || searching}
-          className="absolute inset-y-1.5 right-1.5 px-4 rounded-lg bg-[var(--primary)]
-            text-[var(--primary-foreground)] text-sm font-semibold
-            hover:bg-[var(--primary)]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          {searching ? '…' : 'Find'}
-        </button>
-      </div>
-
-      <p className="text-xs text-center text-[var(--muted-foreground)]">
-        Point the scanner at the label barcode — it will auto-submit
-      </p>
-
-      {error && (
-        <div className="p-3 rounded-lg bg-[var(--destructive)]/10 text-[var(--destructive)] text-sm">
-          {error}
-        </div>
-      )}
-
-      {foundCheckin && !error && (
-        <CheckinConfirmCard
-          checkin={foundCheckin}
-          onCheckOut={handleCheckOut}
-          loading={checkingOut}
-          onCancel={() => { setCode(''); setError('') }}
-        />
-      )}
-
-      {/* Name search toggle */}
-      <div className="pt-2 border-t border-[var(--border)]">
-        <button
-          onClick={() => setShowNameSearch(v => !v)}
-          className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]
-            hover:text-[var(--foreground)] transition-colors mx-auto"
-        >
-          <svg className={`w-4 h-4 transition-transform ${showNameSearch ? 'rotate-90' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          {showNameSearch ? 'Hide name search' : "Can't scan? Search by name"}
+          <span className="text-base font-semibold">Tap to Scan QR Code</span>
+          <span className="text-xs text-[var(--primary)]/70 font-normal">Uses your device camera</span>
         </button>
 
-        {showNameSearch && (
-          <div className="mt-4">
-            <NameSearch onDone={onDone} />
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-[var(--border)]" />
+          <span className="text-xs text-[var(--muted-foreground)]">or type code manually</span>
+          <div className="flex-1 h-px bg-[var(--border)]" />
+        </div>
+
+        {/* Code input (also accepts USB scanner — it types like a keyboard) */}
+        <div className="relative">
+          <input
+            ref={inputRef}
+            value={code}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Type pickup code…"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            className="w-full pl-4 pr-24 py-3 rounded-xl border-2 border-[var(--input)] bg-[var(--background)]
+              text-[var(--foreground)] text-base font-mono tracking-wider uppercase
+              placeholder:text-[var(--muted-foreground)]/50 placeholder:font-sans placeholder:tracking-normal placeholder:normal-case
+              focus:outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/15
+              transition-all"
+          />
+          <button
+            onClick={() => handleSearch()}
+            disabled={!code.trim() || searching}
+            className="absolute inset-y-1.5 right-1.5 px-4 rounded-lg bg-[var(--primary)]
+              text-[var(--primary-foreground)] text-sm font-semibold
+              hover:bg-[var(--primary)]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {searching ? '…' : 'Find'}
+          </button>
+        </div>
+
+        <p className="text-xs text-center text-[var(--muted-foreground)]">
+          USB/Bluetooth barcode scanners also work — they type the code automatically
+        </p>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-[var(--destructive)]/10 text-[var(--destructive)] text-sm">
+            {error}
           </div>
         )}
+
+        {foundCheckin && !error && (
+          <CheckinConfirmCard
+            checkin={foundCheckin}
+            onCheckOut={handleCheckOut}
+            loading={checkingOut}
+            onCancel={() => { setCode(''); setError('') }}
+          />
+        )}
+
+        {/* Name search toggle */}
+        <div className="pt-2 border-t border-[var(--border)]">
+          <button
+            onClick={() => setShowNameSearch(v => !v)}
+            className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]
+              hover:text-[var(--foreground)] transition-colors mx-auto"
+          >
+            <svg className={`w-4 h-4 transition-transform ${showNameSearch ? 'rotate-90' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            {showNameSearch ? 'Hide name search' : "Search by child name instead"}
+          </button>
+
+          {showNameSearch && (
+            <div className="mt-4">
+              <NameSearch onDone={onDone} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

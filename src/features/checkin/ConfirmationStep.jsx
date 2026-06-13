@@ -27,8 +27,8 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
           .child-name { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; }
           .service { font-size: 12px; color: #64748b; margin-top: 2px; }
           .guardian { font-size: 11px; color: #475569; margin-top: 3px; font-weight: 600; }
-          .barcode-section { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-          .barcode-section svg { max-width: 200px; height: 48px; display: block; }
+          .qr-section { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+          .qr-section canvas { display: block; }
           .code { font-size: 13px; font-weight: 700; color: #1A3A8C; letter-spacing: 0.22em; font-family: monospace; }
           .footer { display: flex; align-items: flex-end; justify-content: space-between; }
           .time { font-size: 10px; color: #94a3b8; text-align: right; line-height: 1.5; }
@@ -51,8 +51,8 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
           </div>
           <div class="footer">
             ${showCheckout ? `
-            <div class="barcode-section">
-              <svg id="barcode"></svg>
+            <div class="qr-section">
+              <canvas id="qr"></canvas>
               <div class="code">${checkin.pickup_code}</div>
             </div>` : '<div></div>'}
             <div class="time">
@@ -61,20 +61,20 @@ export default function ConfirmationStep({ checkin, showCheckout = true, onAnoth
             </div>
           </div>
         </div>
-        <script src="https://unpkg.com/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"><\/script>
         <script>
           window.onload = () => {
             ${showCheckout ? `
-            JsBarcode('#barcode', '${checkin.pickup_code}', {
-              format: 'CODE128',
-              width: 2,
-              height: 48,
-              displayValue: false,
-              margin: 0,
-              lineColor: '#0f172a',
-            });` : ''}
+            QRCode.toCanvas(document.getElementById('qr'), '${checkin.pickup_code}', {
+              width: 88,
+              margin: 1,
+              color: { dark: '#0f172a', light: '#ffffff' },
+            }, function() {
+              window.print();
+              window.onafterprint = () => window.close();
+            });` : `
             window.print();
-            window.onafterprint = () => window.close();
+            window.onafterprint = () => window.close();`}
           };
         <\/script>
       </body>

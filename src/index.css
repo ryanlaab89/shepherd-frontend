@@ -166,3 +166,15 @@
 .dark .PhoneInputCountrySelect {
   color-scheme: dark;
 }
+
+/* QR scanner line animation */
+@keyframes qr-scan {
+  0%   { top: 6px;  opacity: 1; }
+  49%  { opacity: 1; }
+  50%  { top: calc(100% - 6px); opacity: 1; }
+  100% { top: 6px;  opacity: 1; }
+}
+.qr-scan-line {
+  position: absolute;
+  animation: qr-scan 2.2s ease-in-out infinite;
+}
