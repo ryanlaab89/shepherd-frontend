@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@apollo/client'
-import { ATTENDANCE_REPORT_QUERY, GUARDIAN_CONTACTS_QUERY } from '@/graphql/queries'
+import { ME_QUERY, ATTENDANCE_REPORT_QUERY, GUARDIAN_CONTACTS_QUERY } from '@/graphql/queries'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
@@ -34,6 +34,7 @@ export default function ReportsPage() {
     ? { start: customStart, end: customEnd }
     : dateRange(PRESETS[preset].days)
 
+  const { data: meData } = useQuery(ME_QUERY)
   const { data: reportData, loading: reportLoading } = useQuery(ATTENDANCE_REPORT_QUERY, {
     variables: { startDate: range.start, endDate: range.end },
     skip: tab !== 'overview',
@@ -43,8 +44,142 @@ export default function ReportsPage() {
     skip: tab !== 'contacts',
   })
 
-  const report   = reportData?.attendanceReport
-  const contacts = contactsData?.guardianContacts ?? []
+  const report     = reportData?.attendanceReport
+  const contacts   = contactsData?.guardianContacts ?? []
+  const churchName = meData?.me?.church?.name ?? 'Kids Ministry'
+
+  const days = Math.max(1, Math.ceil(
+    (new Date(range.end) - new Date(range.start)) / (1000 * 60 * 60 * 24)
+  ) + 1)
+
+  function fmtDate(d) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  function exportOverviewCSV() {
+    if (!report) return
+    const sections = [
+      ['Summary'],
+      ['Metric', 'Value'],
+      ['Total Check-ins', report.total],
+      ['Avg per Day', report.avg_per_day],
+      ['Days Tracked', days],
+      [],
+      ['Daily Breakdown'],
+      ['Date', 'Check-ins'],
+      ...report.by_day.map(d => [fmtDate(d.date), d.count]),
+      [],
+      ['By Class'],
+      ['Class', 'Check-ins'],
+      ...report.by_class.map(c => [c.class_name, c.count]),
+      [],
+      ['By Service'],
+      ['Service', 'Check-ins'],
+      ...report.by_service.map(s => [s.service_name, s.count]),
+    ]
+    const csv  = sections.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `attendance-report-${range.start}-${range.end}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function printReport() {
+    if (!report) return
+    const rangeLabel = `${fmtDate(range.start)} – ${fmtDate(range.end)}`
+    const timeStr    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    function tableRows(data, keyA, keyB) {
+      return data.map(r => `<tr><td>${r[keyA]}</td><td class="num">${r[keyB]}</td></tr>`).join('')
+    }
+
+    const byDayRows = report.by_day.map(d =>
+      `<tr><td>${fmtDate(d.date)}</td><td class="num">${d.count}</td></tr>`
+    ).join('')
+
+    const win = window.open('', '_blank')
+    win.document.write(`<!DOCTYPE html><html><head><title>Attendance Report</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px;color:#0f172a;font-size:13px}
+      .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1A3A8C}
+      .header-left .org{font-size:11px;font-weight:700;color:#1A3A8C;text-transform:uppercase;letter-spacing:.1em}
+      .header-left .title{font-size:22px;font-weight:800;color:#0f172a;margin-top:2px}
+      .header-left .date{font-size:13px;color:#64748b;margin-top:3px}
+      .header-right{text-align:right;font-size:11px;color:#94a3b8;line-height:1.8}
+      .header-right strong{color:#64748b}
+      .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A3A8C;
+        margin:28px 0 12px;padding-bottom:6px;border-bottom:1.5px solid #e2e8f0}
+      .stat-row{display:flex;gap:14px;flex-wrap:wrap}
+      .stat{flex:1;min-width:120px;border:1.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;break-inside:avoid}
+      .stat .num{font-size:28px;font-weight:800;color:#1A3A8C}
+      .stat .lbl{font-size:11px;color:#64748b;margin-top:2px}
+      .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:0}
+      .block{border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;break-inside:avoid}
+      .block-header{padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;
+        font-size:12px;font-weight:700;color:#0f172a}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{text-align:left;padding:6px 14px;font-size:10px;font-weight:600;text-transform:uppercase;
+        letter-spacing:.05em;color:#64748b;background:#fafafa;border-bottom:1px solid #f1f5f9}
+      td{padding:5px 14px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+      tr:last-child td{border-bottom:none}
+      .num{text-align:right;font-weight:700;color:#1A3A8C}
+      @media print{body{padding:16px}.grid-2{grid-template-columns:1fr 1fr}}
+    </style></head><body>
+      <div class="header">
+        <div class="header-left">
+          <div class="org">${churchName}</div>
+          <div class="title">Attendance Report</div>
+          <div class="date">${rangeLabel}</div>
+        </div>
+        <div class="header-right">
+          <div>Printed: <strong>${timeStr}</strong></div>
+          <div>Total Check-ins: <strong>${report.total}</strong></div>
+        </div>
+      </div>
+
+      <div class="section-label">Summary</div>
+      <div class="stat-row">
+        <div class="stat"><div class="num">${report.total}</div><div class="lbl">Total Check-ins</div></div>
+        <div class="stat"><div class="num">${report.avg_per_day}</div><div class="lbl">Avg per Day</div></div>
+        <div class="stat"><div class="num">${days}</div><div class="lbl">Days Tracked</div></div>
+      </div>
+
+      ${report.by_day.length ? `
+      <div class="section-label">Daily Breakdown</div>
+      <div class="block">
+        <table>
+          <thead><tr><th>Date</th><th class="num">Check-ins</th></tr></thead>
+          <tbody>${byDayRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      <div class="section-label">Breakdown</div>
+      <div class="grid-2">
+        ${report.by_class.length ? `
+        <div class="block">
+          <div class="block-header">By Class</div>
+          <table>
+            <thead><tr><th>Class</th><th class="num">Kids</th></tr></thead>
+            <tbody>${tableRows(report.by_class, 'class_name', 'count')}</tbody>
+          </table>
+        </div>` : ''}
+        ${report.by_service.length ? `
+        <div class="block">
+          <div class="block-header">By Service</div>
+          <table>
+            <thead><tr><th>Service</th><th class="num">Kids</th></tr></thead>
+            <tbody>${tableRows(report.by_service, 'service_name', 'count')}</tbody>
+          </table>
+        </div>` : ''}
+      </div>
+
+      <script>setTimeout(function(){window.print();window.onafterprint=function(){window.close();}},300);<\/script>
+    </body></html>`)
+    win.document.close()
+  }
 
   function exportContacts() {
     const header = 'Child,Class,Guardian,Phone,Last Visit,Visits'
@@ -95,6 +230,30 @@ export default function ReportsPage() {
           <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
             className={inputClass + ' w-36'} />
         </div>
+        {tab === 'overview' && report && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={printReport}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 transition-colors">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Report
+            </button>
+            <button onClick={exportOverviewCSV}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)]
+                text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]
+                hover:border-[var(--primary)]/50 transition-colors">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -112,7 +271,7 @@ export default function ReportsPage() {
       </div>
 
       {tab === 'overview' && (
-        <OverviewTab report={report} loading={reportLoading} range={range} />
+        <OverviewTab report={report} loading={reportLoading} range={range} days={days} />
       )}
       {tab === 'contacts' && (
         <ContactsTab contacts={contacts} loading={contactsLoading} onExport={exportContacts} />
@@ -121,13 +280,9 @@ export default function ReportsPage() {
   )
 }
 
-function OverviewTab({ report, loading, range }) {
+function OverviewTab({ report, loading, range, days }) {
   if (loading) return <div className="flex justify-center py-20"><Spinner /></div>
   if (!report)  return null
-
-  const days = Math.max(1, Math.ceil(
-    (new Date(range.end) - new Date(range.start)) / (1000 * 60 * 60 * 24)
-  ) + 1)
 
   const chartData = report.by_day.map(d => ({
     date:  new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
